@@ -1,0 +1,1045 @@
+#!/bin/bash
+#
+# CLCA - CLI CA command utility
+#
+# Copyright (c) 2004-2005 Martin Bartosch, Cynops GmbH
+#
+# 2004-04-26 Martin Bartosch; Cynops GmbH <m.bartosch@cynops.de>
+#
+# This software is distributed under the GNU General Public License - see the
+# accompanying LICENSE file for more details.
+#
+
+# Installation directory - change this to reflect your setup
+CA_HOME="$PWD"
+CFG=$CA_HOME/etc/clca.cfg
+
+# common commands - change settings to suit your system
+TOOLS=$(cat <<EOF
+MV=/bin/mv
+CP=/bin/cp
+LN=/bin/ln
+RM=/bin/rm
+DD=/bin/dd
+MKDIR=/bin/mkdir
+CHMOD=/bin/chmod
+MKTEMP=/bin/mktemp:/usr/bin/mktemp
+CUT=/usr/bin/cut
+CAT=/bin/cat
+SED=/usr/bin/sed:/bin/sed
+DATE=/bin/date
+GREP=/usr/bin/grep:/bin/grep
+EGREP=/usr/bin/egrep:/bin/egrep
+HEAD=/usr/bin/head
+STAT=/usr/bin/stat
+WC=/usr/bin/wc
+TOUCH=/usr/bin/touch
+PERL=/usr/bin/perl
+BASENAME=/usr/bin/basename
+MD5SUM=/usr/bin/md5sum:/sbin/md5
+TAR=/bin/tar:/usr/bin/tar
+EOF
+)
+
+
+######################################################################
+# nothing to change below this line
+
+trap traphandler 2 3
+
+if [ -r $CFG ] ; then
+    . $CFG
+else
+    echo "Configuration file $CFG not found"
+    exit 1
+fi
+
+if [ ! -r $CNF ] ; then
+    echo "OpenSSL config file $CNF not found"
+    exit 1
+fi
+
+
+for i in $TOOLS ; do
+    cmd=${i%=*}
+    arg=${i#*=}
+    path=""
+    for j in ${arg//:/ } ; do
+	if [ -x $j ] ; then
+	    path="$j"
+	    break
+	fi
+    done
+    if [ -z "$path" ] ; then
+	echo "Could not find executable path for '$cmd' in paths '$arg'."
+	echo "Fix the line containing"
+	echo "$i in script $0 (or config file $CFG)"
+	exit 1
+    fi
+    eval "$cmd=\"$path\""
+    CMDLIST="$CMDLIST $cmd"
+done
+
+for i in $OPENSSL $HSM_PRELOAD ; do
+    if [ ! -x $i ] ; then
+        echo "Could not find executable $i"
+        echo "Fix configuration file $CFG"
+        exit 1
+    fi
+done
+
+if [ "$ENGINE" = "openssl" -a "$HSM_PRELOAD" != "" ] ; then
+    echo "NOTE: HSM_PRELOAD should not be necessary for engine 'openssl'"
+fi
+
+
+
+######################################################################
+
+VERSION="0.8"
+
+showhelp()
+{
+    case $1 in
+	commands)
+	    $CAT <<EOF
+CLI CA version $VERSION
+
+Usage: clca [--profile <name>] <command> [arguments]
+
+Available commands:
+  help <command>        - Show help for specified command
+
+  list			- List certificates
+  issue_crl		- Issue CRL
+  certify		- Sign certificate request
+  generate		- Generate Key and issue certificate 
+  revoke		- Revoke certificate
+  initialize		- Initialize CA 
+  backup		- Create backup of CA state
+  check			- Display config file MD5 check sums
+EOF
+	    ;;
+	list)
+	    $CAT <<EOF
+Usage: clca list <filter>
+
+Reads the certificate database and prints out a summary of all
+certificates matching the specified filter. <filter> may be
+either 'valid' or 'revoked'. 
+If <filter> is not specified all certificates are displayed.
+
+EOF
+	    ;;
+	issue_crl)
+	    $CAT <<EOF
+Usage: clca [--profile <name>] issue_crl
+
+Issues a new CRL with default validity. The resulting CRL will
+be stored as $CRLDIR/YYYYMMDDHHMMSS.crl. 
+In addition a symlink to this file will be created, making it 
+possible to refer to the latest CRL as $CRLDIR/ca.crl
+The CRL is written in PEM format and may be converted to DER
+using the command
+openssl crl -in $CRLDIR/ca.crl -out $CRLDIR/cacrl.der -outform der
+
+If --profile <name> is specified the CA script uses the specified
+section from openssl.cnf for CRL generation instead of the CA default.
+
+EOF
+	    ;;
+	genkey)
+	$CAT <<EOF
+Usage: clca genkey [--bits <numbits>] [--enc des3|aes128|aes192|aes256] <name of keyfile>
+
+Generates a rsa key and writes it to private/<name of keyfile>.pem
+Keysize is optional and will default to 2048 if not given. The key
+is encrypted using aes256 or the given encryption algorithm. The 
+locally supported algorithms might differ from those given above,
+check "openssl genrsa help" if necessary.
+ 
+EOF
+		;;
+	certify)
+	    $CAT <<EOF
+Usage: clca [--profile <name>] certify [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS] [--reqformat P10|SSCERT] [--subject <subject>] <request file>
+
+Signs a PKCS#10 certificate request (DER/PEM format is automatically
+detected). Certificate profile and validity is determined by 
+settings in openssl.cnf.
+The certificate request data will be used verbatim in the 
+certification process.
+
+If --reqformat SSCERT is specified then the input file should be
+a self-signed certificate that will be used instead of a PKCS#10 request
+(which is the default).
+
+If a certificate subject is specified via --subject <subject> then
+the subject contained in the request is overridden using the given
+subject.
+
+After certification is performed the new certificate is copied to
+the directory $CERTDIR. 
+The certificate database is updated and a copy of the certificate 
+is written to the file 'newcert.pem' in the current directory.
+
+If --profile <name> is specified the CA script uses the specified
+section from openssl.cnf for certification instead of the CA default.
+
+If --startdate or --enddate are specified, these dates are used for
+the certificate's lifetime. The dates must be specified in the format
+YYMMDDHHMMSS and are interpreted as UTC times.
+If --startdate/--enddate are not specified the default certificate 
+validity is used.
+
+EOF
+	    ;;
+	revoke)
+	    $CAT <<EOF
+Usage: clca [--profile <name>] revoke <serial number>
+
+Revokes the specified certificate. First the script checks if the 
+certificate exists in the certificate database and that it is 
+still valid. If the corresponding certificate exists in the
+certificate directory the certificate is revoked after asking
+the user for approval.
+
+The user is asked if a new CRL should be issued after signing
+the request.
+If CRL generation is requested and --profile <name> is specified
+the CA script uses the specified section from openssl.cnf 
+for CRL generation instead of the CA default.
+
+EOF
+	    ;;
+	initialize)
+	    $CAT <<EOF
+Usage: clca initialize [--req <filename>] [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS]
+
+Initializes the CA database and creates either a self-signed certificate
+or a PKCS#10 certificate request. 
+NOTE: This purges all existing data about issued certificates and CRLs and 
+thus should be performed only once.
+
+If --req <filename> are specified as arguments, no self-signed
+certificate is created, instead a PKCS#10 certificate request is
+written to the specified filename.
+
+If --startdate and --enddate is specified, these dates denominate
+the CA certificate absolute life time for a self-signed CA certificate.
+
+It is safe to call this function after creating the database,
+as it will detect that a CA has already been created and terminate
+with a notification message without modifying any data.
+
+If the CA certificates (cacert.pem and cacert.der) have been removed
+the script will move the current database to the directory 
+$CA_HOME/attic and initialize a new CA.
+
+The following steps must be performed to create a CA:
+
+1. Before the database can be initialized it is necessary to create
+   the certificate profile and CA configuration (config files ca.cfg
+   and openssl.cnf in $CA_HOME/etc).
+
+2. An RSA key must be generated. If a HSM is used, the key must
+   be generated using the HSM utilities. Otherwise you will need
+   to create a private key by issuing
+
+   openssl genrsa -des3 -out $CAPRIVDIR/cakey.pem 2048 $CONFIGARG
+   chmod 400 $CAPRIVDIR/cakey.pem
+
+3. Create the CA using the initialize command
+
+EOF
+	    ;;
+	check)
+	    $CAT <<EOF
+Usage: clca check
+
+Display MD5 check sums for config and executable files. 
+
+Use a distinct
+$MD5SUM $0 
+to verify integrity of this script!
+EOF
+        ;;
+	backup)
+	    $CAT <<EOF
+Usage: clca backup [filename]
+
+Creates a backup of the CA database and configuration in gzip compressed
+tar format. If no filename is specified, the backup will be named
+YYYYMMDDHHMMSS-clca-backup.tar.gz in the current directory (caps replaced
+with timestamp).
+EOF
+        ;;
+	    
+    esac
+}
+
+
+# calls cleanup and exit with specified exit code
+abort()
+{
+    cleanup
+    exit $1
+}
+
+traphandler()
+{
+    abort 1
+}
+
+# clean temporary files
+cleanup()
+{
+    if [ -n "$RM" ] ; then
+	$RM -f $PURGEFILES
+    fi
+}
+
+# register file to purge later
+topurge()
+{
+    if [ -n "$1" ] ; then
+	PURGEFILES="$PURGEFILES $*"
+    fi
+}
+
+
+# modify openssl.conf and adapt paths contained in the configuration
+# file to reflect the settings given in clca.cfg
+# this function may be called more then once
+# ARG: path to openssl.cnf file
+modify_cnf()
+{
+    $CAT <<EOF | $PERL - $1 >$1.new
+\$cahome="$CA_HOME";
+\$cadb="$CADBDIR/index.txt";
+\$cacert="$CACERT";
+\$serial="$CADBDIR/serial";
+\$crlnumber="$CADBDIR/crlnumber.txt";
+\$crldir="$CRLDIR";
+\$cacrl="$CRLDIR/ca.crl";
+\$certdir="$CERTDIR";
+
+foreach (qw (\$cadb \$cacert \$serial \$crldir \$cacrl \$certdir)) {
+    eval "\$_ =~ s#\$cahome#\\\\\\\$dir#g";
+}
+
+while (<>) {
+    s/^(dir)\s*=.*/\$1 = \$cahome/;
+    s/^(certs)\s*=.*/\$1 = \$certdir/;
+    s/^(crl_dir)\s*=.*/\$1 = \$crldir/;
+    s/^(database)\s*=.*/\$1 = \$cadb/;
+    s/^(new_certs_dir)\s*=.*/\$1 = \$certdir/;
+    s/^(certificate)\s*=.*/\$1 = \$cacert/;
+    s/^(serial)\s*=.*/\$1 = \$serial/;
+    s/^(crlnumber)\s*=.*/\$1 = \$crlnumber/;
+    s/^(crl)\s*=.*/\$1 = \$cacrl/;
+    print;
+}
+EOF
+
+    if [ $? = 0 ] ; then
+	$MV $1.new $1
+    else
+	echo "Error: could not modify openssl.cnf"
+	abort 1
+    fi
+}
+
+
+######################################################################
+######################################################################
+
+
+genkey()
+{
+
+    if [ "$1" = "" ] ; then
+		showhelp genkey
+		abort 1
+    fi
+
+	BITS=2048	
+
+ 	while [ -n "$1" ] ; do
+	case "$1" in
+	    --bits)
+		BITS="$2"
+		shift
+		shift
+		;;
+	    *)
+		KEYFILE=private/$1.pem
+		shift
+		;;
+	esac
+    done
+	
+	if [ -z "$KEYFILE" ]; then
+		echo "you need to pass a name for the key file";
+		abort 1
+	fi  
+	
+	if [ -e "$KEYFILE" ]; then
+		echo "$KEYFILE already exists - aborting";
+		abort 1
+	fi  
+
+	echo "generating key - enter passphrase when prompted"
+	
+	$OPENSSL genrsa -aes256 -out "$KEYFILE" $BITS 
+	$CHMOD 400 $KEYFILE
+	echo "key written to $KEYFILE"
+}
+
+
+certify()
+{
+    if [ "$1" = "" ] ; then
+	showhelp certify
+	abort 1
+    fi
+
+    REQFORMAT="P10"
+    while [ -n "$1" ] ; do
+	case "$1" in
+	    --startdate)
+		# append "Z" for UTC time
+		STARTDATE="$2"
+		STARTDATE="${STARTDATE%%Z*}Z"
+		shift
+		shift
+		;;
+	    --enddate)
+		# append "Z" for UTC time
+		ENDDATE="$2"
+		ENDDATE="${ENDDATE%%Z*}Z"
+		shift
+		shift
+		;;
+	    --reqformat)
+		# optional request format
+		# possible values: "SSCERT"
+		REQFORMAT="$2"
+		shift
+		shift
+		;;
+	    --subject)
+		SUBJECT="$2"
+		shift
+		shift
+		;;
+	    *)
+		REQ="$1"
+		shift
+		;;
+	esac
+    done
+
+    if [ ! -r "$REQ" ] ; then
+	echo "Could not read certificate request $REQ"
+	abort 1
+    fi
+
+    case "$REQFORMAT" in
+	P10|PKCS10)
+	    echo "PKCS 10 request"
+	    INFORM=der
+	    if $HEAD -1 $REQ | $GREP "BEGIN.*CERTIFICATE REQUEST" >/dev/null 2>&1 ; then
+		INFORM=pem
+		INFILE="$REQ"
+	    else
+		echo "Converting DER encoded certificate request to PEM"
+		INFILE=`$MKTEMP /tmp/temp.XXXXXX`
+		topurge $INFILE
+		
+		$OPENSSL req -in $REQ -inform $INFORM -out $INFILE -outform pem
+		if [ "$?" != 0 ] ; then
+		    echo "Conversion failed."
+		    abort 1
+		fi
+	    fi
+	    REQUESTINPUT="-in $INFILE"
+	    ;;
+	SSCERT|CERT)
+	    echo "self signed cert request"
+	    INFORM=der
+	    if $HEAD -1 $REQ | $GREP "BEGIN.*CERTIFICATE" >/dev/null 2>&1 ; then
+		INFORM=pem
+		INFILE="$REQ"
+	    else
+		echo "Converting DER encoded certificate to PEM"
+		INFILE=`$MKTEMP /tmp/temp.XXXXXX`
+		topurge $INFILE
+		
+		$OPENSSL x509 -in $REQ -inform $INFORM -out $INFILE -outform pem
+		if [ "$?" != 0 ] ; then
+		    echo "Conversion failed."
+		    abort 1
+		fi
+	    fi
+	    REQUESTINPUT="-ss_cert $INFILE"
+	    ;;
+	KEY)
+		echo "create request and certificate for a given key"
+		
+		if [ ! -e $REQ ]; then
+			echo "pass pem encoded key as last argument."
+			abort 1;
+		fi
+		
+		export CN
+		if [ -z "$SUBJECT" ]; then
+			echo -n "enter branch name: "
+			read CN		
+		else
+			CN=$SUBJECT
+			SUBJECT=
+		fi
+		INFILE=`$MKTEMP /tmp/temp.XXXXXX`
+		topurge $INFILE
+		
+		echo "generating request - please enter passphrase when asked." 
+		
+		$OPENSSL req -new -out $INFILE -outform pem -key "$REQ" $CONFIGARG
+		if [ "$?" != 0 ] ; then
+		    echo "CSR creation failed."
+		    abort 1		
+	    fi
+	    
+	    REQUESTINPUT="-in $INFILE"
+		;;
+	*)
+	    echo "Unsupported request format '$REQFORMAT' specified"
+	    abort 1
+	    ;;
+    esac
+	
+
+
+
+    if [ "$ENGINE" = "openssl" ] ; then
+	KEYARG="-keyfile $CAPRIVDIR/$ROOTKEYNAME"
+    else
+	KEYARG="-keyfile $ROOTKEYNAME -keyform engine -engine $ENGINE"
+    fi
+
+    if [ -n "$STARTDATE" ] ; then
+	VALIDITY="-startdate $STARTDATE "
+    fi
+    if [ -n "$ENDDATE" ] ; then
+	VALIDITY="$VALIDITY -enddate $ENDDATE "
+    fi
+    
+    SERIAL=`$CAT $CADBDIR/serial`
+    if [ -n "$SUBJECT" ] ; then SUBJECT="-subj '$SUBJECT'" ; fi
+
+    eval $HSM_PRELOAD $OPENSSL ca $KEYARG $PROFILEARG $VALIDITY $SUBJECT -cert $CACERT -out newcert.pem -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
+
+    if [ "$?" != 0 ] ; then
+	echo "Certification failed."
+	abort 1
+    fi
+    
+    if [ -r $CERTDIR/$SERIAL.pem ] ; then
+	echo "Wrote certificate to $CERTDIR/$SERIAL.pem"
+    fi
+}
+
+######################################################################
+revoke()
+{
+    if [ "$1" = "" ] ; then
+	showhelp revoke
+	abort 0
+    fi
+
+    FOUND=$((`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$1\>" | wc -l`))
+
+    case $FOUND in
+	0)
+	    echo "No matching valid certificate found for serial number '$1'"
+	    abort 0
+	    ;;
+	1)
+	    SERIAL=`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$1\>" | $CUT -f2`
+	    if [ -r $CERTDIR/$SERIAL.pem ] ; then
+		echo "Revoking certificate with serial number '$SERIAL':"
+		
+		$OPENSSL x509 -in $CERTDIR/$SERIAL.pem -subject -dates -serial -fingerprint -noout
+		if [ "$?" != 0 ] ; then
+		    echo "Could not decode X.509 certificate $CERTDIR/$SERIAL.pem. Should not happen."
+		    abort 1
+		fi
+		
+
+		if [ "$ENGINE" = "openssl" ] ; then
+		    KEYARG="-keyfile $CAPRIVDIR/$ROOTKEYNAME"
+		else
+		    KEYARG="-keyfile $ROOTKEYNAME -keyform engine -engine $ENGINE"
+		fi
+
+		$HSM_PRELOAD $OPENSSL ca $KEYARG $PROFILEARG -revoke $CERTDIR/$SERIAL.pem $CONFIGARG
+		if [ $? != 0 ] ; then
+		    echo "Could not revoke certificate."
+		    abort 1
+		fi
+
+		issue_crl
+	    else
+		echo "ERROR: Certificate file $CERTDIR/$SERIAL.pem not found"
+		abort 1
+	    fi
+	    ;;
+	*)
+	    echo "ERROR: More than one certificate found."
+	    abort 1
+	    ;;
+    esac
+
+}
+
+######################################################################
+list()
+{
+    FILTER="" # default: all certs
+    case "$1" in
+	valid)
+	    echo "Filter: Only valid certificates"
+	    FILTER="V"
+	    ;;
+	revoked)
+	    echo "Filter: Only revoked certificates"
+	    FILTER="R"
+	    ;;
+	*)
+	    echo "Filter: all certificates"
+	    ;;
+    esac
+
+    $CUT -f1,4 <$CADBDIR/index.txt | ( while read status serial ; do
+	    if [ "$FILTER" = "" -o "$FILTER" = "$status" ] ; then
+		CERTFILE="$CERTDIR/$serial.pem"
+
+		case $status in
+		    V)
+			PSTATUS="VALID"
+			;;
+		    R)
+			PSTATUS="REVOKED"
+			;;
+		    E)
+			PSTATUS="EXPIRED"
+			;;
+		esac
+
+		echo "$PSTATUS Certificate $CERTFILE"
+		if [ -r "$CERTFILE" ] ; then
+		    $OPENSSL x509 -in $CERTFILE -subject -dates -serial -fingerprint -noout
+		    echo
+		else
+		    echo "WARNING: Certificate $CERTFILE does not exist"
+		fi
+	    fi
+	done )
+}
+
+
+######################################################################
+# issue CRL
+issue_crl()
+{
+    echo "Issuing new CRL..."
+    
+    # determine filename
+    TIMESTAMP=`$DATE +%Y%m%d%H%M%S`
+    CRLFILE=$CRLDIR/$TIMESTAMP.crl
+    LATEST=$CRLDIR/ca.crl
+
+    if [ "$ENGINE" = "openssl" ] ; then
+	KEYARG="-keyfile $CA_HOME/private/$ROOTKEYNAME"
+    else
+	KEYARG="-keyfile $ROOTKEYNAME -keyform engine -engine $ENGINE"
+    fi
+    
+    $HSM_PRELOAD $OPENSSL ca -gencrl -md sha1 $KEYARG $PROFILEARG -out $CRLFILE $CONFIGARG
+    if [ $? != 0 ] ; then
+	echo "Could not issue CRL."
+	$RM -f $CRLFILE
+	abort 1
+    fi
+    
+    ( cd $CRLDIR && $LN -sf `$BASENAME $CRLFILE` `$BASENAME $LATEST` )
+    
+    $OPENSSL crl -in $CRLFILE -text -noout
+    
+    echo
+    echo "* CRL $CRLFILE created."
+    echo "NOTE: Latest CRL is also available as $LATEST."
+}
+
+
+######################################################################
+# set up CA structure
+initialize()
+{
+    while [ -n "$1" ] ; do
+	case "$1" in
+	    --startdate)
+		STARTDATE="$2"
+		STARTDATE="${STARTDATE%%Z*}Z"
+		shift
+		shift
+		;;
+	    --enddate)
+		ENDDATE="$2"
+		ENDDATE="${ENDDATE%%Z*}Z"
+		shift
+		shift
+		;;
+	    --req)
+		CAREQ="$2"
+		shift
+		shift
+		;;
+	    --serial)
+		SERIAL="$2"
+		shift
+		shift
+		;;
+	    *)
+		showhelp initialize
+		abort 0
+		;;
+	esac
+    done
+
+    if [ -n "$CAREQ" ] ; then
+	if [ -n "$STARTDATE" -o -n "$ENDDATE" ] ; then
+	    echo "--req and --startdate/--enddate are mutually exclusive"
+	    abort 1
+	fi
+    fi
+
+    # verify if CA key already exists
+    case "$ENGINE" in
+	chil)
+	    FOUND=`$NFAST_HOME/bin/nfkminfo -k | ( while read dummy1 app dummy2 key ; do
+		if [ "$dummy1" = "AppName" -a "$app" = "hwcrhk" -a "$key" = "$ROOTKEYNAME" ] ; then
+		    echo 1
+		fi
+	    done ) `
+	    ;;
+	openssl)
+	    if [ -r $CAPRIVDIR/$ROOTKEYNAME ] ; then
+		FOUND=1
+	    fi
+	    ;;
+	*)
+	    echo "Engine '$ENGINE' not supported yet"
+	    abort 1
+	    ;;
+    esac
+
+    if [ "$FOUND" != "1" ] ; then
+	echo "Root CA key '$ROOTKEYNAME' was not found, please create root key or"
+	echo "fix configuration"
+	case "$ENGINE" in
+	    openssl)
+		echo "Hint:"
+		echo "mkdir $CAPRIVDIR"
+		echo "openssl genrsa -des3 -out $CAPRIVDIR/$ROOTKEYNAME 2048 $CONFIGARG"
+		echo "chmod 400 $CAPRIVDIR/$ROOTKEYNAME"
+		;;
+	    chil)
+		echo "Hint:"
+		echo "$NFAST_HOME/bin/generatekey2 hwcrhk NAME=$ROOTKEYNAME"
+		;;
+	esac
+	
+	abort 1;
+    fi
+
+    if [ -e $CACERT -o -e $CADBDIR/`$BASENAME $CACERT .pem`.der ] ; then
+	echo "CA Certificate already exists. Bailing out."
+	echo "If you wish to clear this CA and start with a new one remove the following"
+	echo "files and directories:"
+	if [ "$ENGINE" = "openssl" ] ; then
+	    
+	    echo "# rm -rf $CAPRIVDIR # only if you wish to erase the private key"
+	fi
+	echo "rm -rf $CADBDIR"
+	echo "rm -rf $CERTDIR"
+	echo "rm -rf $CRLDIR"
+	abort 1
+    fi
+
+    echo "Creating a new CA..."
+
+    if [ -d $CADBDIR ] ; then
+	ATTIC=$CA_HOME/attic
+	echo "INFO: Existing CA will be kept as backup"
+	
+	if [ -d $ATTIC ] ; then
+	    echo "Old backup $ATTIC is in the way, please correct this."
+	    abort 1
+	fi
+	$MKDIR -p $ATTIC || abort 1
+	for i in $CADBDIR $CERTDIR $CRLDIR ; do
+	    $MV -f $i $ATTIC || echo -e "ERROR"
+	    echo "* Saved old $i to $ATTIC"
+	done
+    fi
+    
+    echo -e "* Adjusting $CNF file"
+    $MKDIR -p $CADBDIR
+    $CP $CNF $CNF.bak
+
+    # adapt openssl.cnf file
+    modify_cnf $CNF
+
+    for i in $CERTDIR $CRLDIR ; do
+	echo "* Creating directory $i"
+	$MKDIR -p $i || abort 1
+    done
+    
+    if [ "$ENGINE" = "openssl" ] ; then
+	echo "* Creating directory $CAPRIVDIR"
+	$MKDIR -m 700 -p $CAPRIVDIR || abort 1
+    fi
+    
+    echo "* Initializing CA"
+    
+    if [ "$ENGINE" = "openssl" ] ; then
+	echo "Initialize random seed"
+    #
+	$DD if=/dev/urandom of=$CA_HOME/private/.rand bs=1 count=1024
+	$CHMOD 600 $CAPRIVDIR/.rand
+	if [ "`$WC -c $CAPRIVDIR/.rand | awk '{print $1}'`" != "1024" ] ; then
+	    echo "Could not read enough random data from /dev/random, rerun this script"
+	    abort 1
+	fi
+	echo "* Set path to random seed"
+    #
+	export RANDFILE=$CAPRIVDIR/.rand
+    fi
+    
+    echo "* Initializing certificate index file"
+    $TOUCH $CADBDIR/index.txt
+    echo "* Initializing serial numbers"
+    $CAT > $CADBDIR/serial <<EOF
+01
+EOF
+    echo "* Initializing CRL index"
+    $CAT > $CADBDIR/crlnumber.txt <<EOF
+01
+EOF
+
+    
+    
+    if [ "$ENGINE" = "openssl" ] ; then
+	KEYARG="-key $CAPRIVDIR/$ROOTKEYNAME"
+    else
+	KEYARG="-key $ROOTKEYNAME -keyform engine -engine $ENGINE"
+    fi
+    
+    if [ -z "$CAREQ" ]; then
+	# create self-signed certificate
+	X509ARG=-x509
+	if [ -n "$SERIAL" ] ; then
+	    X509ARG="$X509ARG -set_serial $SERIAL"
+	fi
+
+	OUT="$CACERT"
+
+	# determine if absolute certificate validity is requested
+	if [ -n "$STARTDATE" -o -n "$ENDDATE" ] ; then
+	    HAVE_VALIDITY=1
+	    # work around OpenSSL bug: self-signed certificates cannot
+	    # be created with absolute validity, so create a temporary
+	    # self-signed cert with validity 1 days, a certificate request
+	    # and certify the request using the temporary certificate
+	    OUT=`$MKTEMP tempcacert.XXXXXX`
+	    topurge $OUT
+	    # this temporary certificate should not exist at all, so limit
+	    # its validity to one day.
+	    CA_VALIDITY=1
+	    
+	    echo "* Absolute validity requested, creating dummy certificate to work around an"
+	    echo "  OpenSSL limitation. You will have to enter the private key PIN twice due"
+	    echo "  to this problem."
+	fi
+    else
+	# create certificate request only
+	echo "* Generating self-signed CA root certificate with a validity of $CA_VALIDITY days"
+	OUT="$CAREQ"
+    fi
+
+	# oliwel - overload environment to get a clean request
+	export CN="Root CA"
+
+    $HSM_PRELOAD $OPENSSL req -new $X509ARG -days $CA_VALIDITY $KEYARG -out $OUT $CONFIGARG
+
+    if [ $? != 0 ] ; then
+	echo "Something went wrong, could not create $OUT."
+	abort 1
+    fi
+
+
+    # self-signed-certificate-with-absolute-validity workaround continued 
+    if [ -n "$HAVE_VALIDITY" ] ; then
+	# 
+	if [ -n "$STARTDATE" ] ; then
+	    VALIDITY="-startdate $STARTDATE "
+	fi
+	if [ -n "$ENDDATE" ] ; then
+	    VALIDITY="$VALIDITY -enddate $ENDDATE "
+	fi
+
+ 	# now we have got:
+ 	# a dummy ca certificate, validity 1 day, subject as entered
+ 	SAVED_CACERT="$CACERT"
+ 	CACERT="$OUT"
+	
+	# force serial number of prototype certificate
+ 	SAVED_SERIAL=`$CAT $CADBDIR/serial`
+	SERIAL=`$OPENSSL x509 -noout -serial -in $OUT`
+	SERIAL="${SERIAL#*=}"
+ 	echo "$SERIAL" >$CADBDIR/serial
+	
+ 	certify $VALIDITY --reqformat SSCERT $OUT
+
+ 	CACERT="$SAVED_CACERT"
+ 	$RM -f newcert.pem
+
+	# install ca certificate
+ 	$MV $CERTDIR/$SERIAL.pem $CACERT
+
+	# restore previous serial number
+ 	echo "$SAVED_SERIAL" >$CADBDIR/serial
+
+	# clear cert db
+	$MV $CADBDIR/index.txt.old $CADBDIR/index.txt
+    fi
+
+
+    # final step for self-signed certificates
+    if [ -z "$CAREQ" ]; then
+	# convert cacert to der
+	    $OPENSSL x509 -in $CACERT -inform pem -out $CADBDIR/`$BASENAME $CACERT .pem`.der -outform der
+	    if [ $? != 0 ] ; then
+		echo "Could not convert certificate to DER (should not happen)."
+	    fi
+	    echo "* CA root certificate contents:"
+	    $OPENSSL x509 -in $CACERT -noout -text 
+    else
+	echo "* Certify PKCS#10 $CAREQ and place resulting CA certificate in $CACERT"
+    fi
+
+}
+
+check() 
+{
+    echo "MD5 check sums for config files:"
+    for i in $CFG $CNF ; do
+	$MD5SUM $i
+    done
+
+    echo
+    echo "Cumulative checksum over all system tools and executables:"
+    # compute cumulative checksum on system tools
+    ( for i in $CMDLIST OPENSSL HSM_PRELOAD ; do
+          eval \$MD5SUM \$$i
+      done ) | $MD5SUM
+
+    echo
+    echo "Remember to run"
+    echo "$MD5SUM $0 $MD5SUM"
+    echo "to verify integrity of this script and md5sum itself."
+    echo
+}
+
+
+backup() 
+{
+    echo "Backup CA configuration and database"
+    
+    if [ "$1" = "" ] ; then
+	TIMESTAMP=`$DATE +%Y%m%d%H%M%S`
+	FILENAME="$TIMESTAMP-clca-backup.tar.gz"
+    else 
+	FILENAME="$1"
+    fi
+    if [ -e "$FILENAME" ] ; then
+	echo "File $FILENAME already exists. Aborted."
+	abort 1
+    fi
+    echo "Creating backup archive file $FILENAME"
+    
+    ( cd $CA_HOME && $TAR -c -z --exclude $FILENAME -f - . ) >$FILENAME
+}
+
+
+# undocumented feature - modify openssl.cnf to reflect current 
+# path settings
+modifycnf()
+{
+    echo "Modifying $CNF file"
+    modify_cnf $CNF
+}
+
+######################################################################
+######################################################################
+
+# CA profile to use
+PROFILE="CA_default"
+
+if [ "$1" = "--profile" ] ; then
+    PROFILE="$2"
+    echo "Using profile $PROFILE"
+    shift
+    shift
+fi
+
+if [ "$PROFILE" != "" ] ; then PROFILEARG="-name $PROFILE" ; fi
+if [ "$CNF" != "" ] ; then CONFIGARG="-config $CNF" ; fi
+
+
+CMD=`$BASENAME $0 | sed -e 's/^clca//'`
+INVOCATION="$0"
+if [ "$CMD" = "" ] ; then
+    if [ "$1" != "" ] ; then
+	CMD="$1"
+	INVOCATION="$0 $CMD"
+	shift
+    else
+	CMD="help"
+    fi
+fi
+CMD=`echo $CMD | $SED -e 's/^_//'`
+
+case "$CMD" in
+    issue_crl|certify|genkey|revoke|list|initialize|check|backup|modifycnf)
+        :
+	;;
+    help)
+	if [ "$1" = "" ] ; then
+	    showhelp commands
+	else
+	    showhelp $1
+	fi
+	abort 0
+	;;
+    *)
+	echo "Unknown invocation mode '$CMD'"
+	showhelp commands
+	abort 1
+	;;
+esac
+
+$CMD "$@"
+cleanup

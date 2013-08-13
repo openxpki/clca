@@ -1,0 +1,85 @@
+# Sample Root CA
+# 2004-10-01 Martin Bartosch; Cynops GmbH <m.bartosch@cynops.de>
+#
+
+HOME			= .
+RANDFILE		= $ENV::HOME/.rnd
+
+oid_section		= new_oids
+default_md	= sha1
+
+[ new_oids ]
+
+####################################################################
+[ ca ]
+default_ca	= CA_default		# The default ca section
+
+####################################################################
+[ CA_default ]
+
+dir = /path/to/RootCA
+certs = $dir/certs
+crl_dir = $dir/crl
+database = $dir/ca/index.txt
+new_certs_dir = $dir/certs
+
+certificate = $dir/ca/cacert.pem
+serial = $dir/ca/serial
+crl = $dir/crl/ca.crl
+RANDFILE        = $dir/private/.rand    # private random number file
+
+default_md	= sha1
+crlnumber      = $dir/ca/crlnumber.txt
+
+x509_extensions	= root_ext		# The extentions to add to the cert
+
+crl_extensions	= root_crl_ext
+
+default_days	= 1			# how long to certify for
+default_crl_days= 365			# how long before next CRL
+preserve	= no			# keep passed DN ordering
+
+policy		= policy_match
+
+# For the CA policy
+[ policy_match ]
+countryName		= optional
+organizationName	= optional
+organizationalUnitName	= optional
+commonName		= supplied
+domainComponent         = optional
+
+####################################################################
+[ req ]
+# settings for 'ca initialize'
+distinguished_name	= root_dn
+prompt			= no
+x509_extensions	= root_ext
+string_mask = nombstr
+
+[ root_dn ]
+countryName = DE
+organizationName = OpenXPKI
+organizationalUnitName = PKI
+commonName = OpenXPKI Root DUMMY CA 1
+
+[ root_ext ]
+
+subjectKeyIdentifier=hash
+
+authorityKeyIdentifier=keyid:always
+
+basicConstraints = critical,CA:true
+
+keyUsage = critical, cRLSign, keyCertSign
+# NOTE: this is a private OID of Cynops GmbH, if you enable this line
+# you MUST change xxxxx to YOUR enterprise OID and choose a policy oid
+# below it.
+# See http://pen.iana.org/pen/app
+#certificatePolicies = ia5org,1.3.6.1.4.1.xxxxx
+
+[ root_crl_ext ]
+
+issuerAltName=issuer:copy
+authorityKeyIdentifier=keyid:always,issuer:always
+
