@@ -1,0 +1,6 @@
+This directory contains the build environment for packaging CLCA
+and assorted tools in a bootable Debian Live CD.
+
+To build the image run ./build-iso.sh on a Debian system (requires
+the live-build package).
+
