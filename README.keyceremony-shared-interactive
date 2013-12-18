@@ -21,7 +21,8 @@ cp etc/openssl.cnf dummyca/etc/
 
 cat <<EOF >>dummyca/etc/clca.cfg
 get_passphrase() {
-   ../bin/secret get --n $N --k $K
+   eval \`../bin/secret get --n $N --k $K\`
+   echo \$PASSPHRASE
 }
 EOF
 
