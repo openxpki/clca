@@ -30,7 +30,7 @@ EOF
 
 Required: you need N=5 persons for safekeeping of the CA shares.
 
-PASSPHRASE=`./bin/secret generate  --n $N --k $K` openssl genrsa -aes256 -passout env:PASSPHRASE -out dummyca/private/rsa-rootkey 2048
+eval `./bin/secret generate  --n $N --k $K` openssl genrsa -aes256 -passout env:PASSPHRASE -out dummyca/private/rsa-rootkey 2048
 
 Each share holder must copy the displayed share literally and keep it.
 
