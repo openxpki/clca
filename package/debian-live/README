@@ -1,6 +1,27 @@
+# CLCA on Debian Live (Live Root CA)
 This directory contains the build environment for packaging CLCA
 and assorted tools in a bootable Debian Live CD.
 
 To build the image run ./build-iso.sh on a Debian system (requires
 the live-build package).
+
+## Base build
+The base build contains the base tools clca (for CA operation) and
+secret (for optional secret sharing).
+
+## Custom build
+
+### Thales/nCipher nFast HSM support
+The addon script addons.d/50-nfast.sh scans for the distribution files
+of the Thales/nCipher nFast drivers in this directory.
+
+If the addon detects a file with the file pattern
+
+nCSS-linux-user-*zip
+
+in this directory, it will automatically include the drivers in the
+generated ISO.
+
+In addition, the default user is changed from "user" to "nfast" to
+make HSM operations easier for the operator.
 

@@ -46,11 +46,7 @@ case $DISTRIBUTION in
     wheezy)
         echo "Building for Debian Wheezy"
         APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent username=$USERNAME hostname=$HOSTNAME"
-        ;;
-    squeeze)
-        echo "Building for Debian Squeeze"
-        APPEND_OPTIONS="$APPEND_OPTIONS persistent quiet"
-        LB_OPTIONS="$LB_OPTIONS --username $USERNAME --hostname $HOSTNAME"
+	TARGETROOT=config/includes.chroot
         ;;
     *)
         echo "ERROR: unsupported distribution $DISTRIBUTION"
@@ -67,13 +63,9 @@ fi
 echo "Cleaning up previous builds..."
 lb clean
 
-echo "Generating initial configuration..."
-lb config $LB_OPTIONS --bootappend-live "$APPEND_OPTIONS"
-
 # the following variables can be used by addons
 BASE=../..
-TARGET_ROOT=config/includes.chroot/
-mkdir -p $TARGET_ROOT
+mkdir -p $TARGETROOT
 
 echo "Installing addons..."
 if [ -d "addons.d" ]; then
@@ -84,6 +76,10 @@ if [ -d "addons.d" ]; then
       fi
    done
 fi
+
+echo "Generating initial configuration..."
+lb config $LB_OPTIONS --bootappend-live "$APPEND_OPTIONS"
+
 
 echo "Injecting additional packages:"
 echo $PACKAGES
