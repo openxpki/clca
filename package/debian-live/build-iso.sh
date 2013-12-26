@@ -1,6 +1,6 @@
 #!/bin/bash
 # 
-# build-iso.sh - builds OpenXPKI Root CA Live CD
+# build-iso.sh - builds OpenXPKI Project Root CA Bootable Live Medium
 # Copyright (c) 2013 OpenXPKI Project
 # Authors: Scott Hardin, Gideon Knocke and Martin Bartosch
 #
@@ -15,37 +15,16 @@ PACKAGES=""
 
 #DRYRUN=1
 
-# use the same keyboard layout as on build system
-if [ -r /etc/default/keyboard ] ; then
-    . /etc/default/keyboard
-    echo "Using keyboard layouts $XKBLAYOUT from build system"
-    KEYBOARD_LAYOUTS=$XKBLAYOUT
-fi
-
-
 DISTRIBUTION=`lsb_release -c | awk '{ print $2 }'`
 if [ $? != 0 ] ; then
     echo "ERROR: could not run lsb_release"
     exit 1
 fi
 
-LB_OPTIONS="--iso-application $ORGANIZATION-Live-RootCA \
---iso-publisher OpenXPKI \
---iso-volume $ORGANIZATION-Live-RootCA \
---distribution $DISTRIBUTION"
-
-[ -n "$ARCHITECTURE" ] && LB_OPTIONS="$LB_OPTIONS --architectures \"$ARCHITECTURE\""
-[ -n "$LINUX_FLAVOUR" ] && LB_OPTIONS="$LB_OPTIONS --linux-flavours \"$LINUX_FLAVOUR\""
-[ -n "$KEYBOARD_LAYOUTS" ] && APPEND_OPTIONS="$APPEND_OPTIONS keyboard-layouts=$KEYBOARD_LAYOUTS"
-
-PACKAGES="make vim less"
-# packages for secret sharing
-#PACKAGES="$PACKAGES pciutils gcc linux-headers"
-
 case $DISTRIBUTION in
     wheezy)
         echo "Building for Debian Wheezy"
-        APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent hostname=$HOSTNAME"
+        APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent username=\$USERNAME hostname=\$HOSTNAME"
 	TARGETROOT=config/includes.chroot
         ;;
     *)
@@ -53,6 +32,14 @@ case $DISTRIBUTION in
         exit 1
         ;;
 esac
+
+
+# use the same keyboard layout as on build system
+if [ -r /etc/default/keyboard ] ; then
+    . /etc/default/keyboard
+    echo "Using keyboard layouts $XKBLAYOUT from build system"
+    KEYBOARD_LAYOUTS=$XKBLAYOUT
+fi
 
 # remove existing conf
 if [ -d config/ ]; then
@@ -65,7 +52,11 @@ lb clean
 
 # the following variables can be used by addons
 BASE=../..
+[ -z "$TARGETROOT" ] && exit 1
 mkdir -p $TARGETROOT
+
+# base packages
+PACKAGES="make vim less"
 
 echo "Installing addons..."
 if [ -d "addons.d" ]; then
@@ -77,10 +68,20 @@ if [ -d "addons.d" ]; then
    done
 fi
 
-APPEND_OPTIONS="$APPEND_OPTIONS username=$USERNAME"
-echo "Generating initial configuration..."
-lb config $LB_OPTIONS --bootappend-live "$APPEND_OPTIONS"
+LB_OPTIONS="--iso-application $ORGANIZATION-Live-RootCA \
+--iso-publisher OpenXPKI \
+--iso-volume $ORGANIZATION-Live-RootCA \
+--distribution $DISTRIBUTION"
 
+[ -n "$ARCHITECTURE" ] && LB_OPTIONS="$LB_OPTIONS --architectures \"$ARCHITECTURE\""
+[ -n "$LINUX_FLAVOUR" ] && LB_OPTIONS="$LB_OPTIONS --linux-flavours \"$LINUX_FLAVOUR\""
+[ -n "$KEYBOARD_LAYOUTS" ] && APPEND_OPTIONS="$APPEND_OPTIONS keyboard-layouts=$KEYBOARD_LAYOUTS"
+
+echo "Generating initial configuration..."
+APPEND_OPTIONS="`eval echo $APPEND_OPTIONS`"
+echo "bootappend options: $APPEND_OPTIONS"
+
+lb config $LB_OPTIONS --bootappend-live "$APPEND_OPTIONS"
 
 echo "Injecting additional packages:"
 echo $PACKAGES

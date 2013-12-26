@@ -14,3 +14,17 @@ if [ -f "/home/$USERNAME/htdocs/index.html" ]; then
   chromium /home/$USERNAME/htdocs/index.html &
 fi
 EOF
+
+# prepare user's wm startup
+    cat <<EOF >$TARGETROOT/etc/rc.local.d/gui-setup
+#!/bin/sh -e
+
+if [ ! -d /home/$USERNAME/.config/openbox ] ; then
+    mkdir -p /home/$USERNAME/.config/openbox
+    cp /etc/xdg/openbox/autostart /home/$USERNAME/.config/openbox/
+    chown -R $USERNAME /home/$USERNAME/.config
+fi
+EOF
+
+chmod 755 $TARGETROOT/etc/rc.local.d/gui-setup
+

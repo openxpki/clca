@@ -40,18 +40,8 @@ if [ -r "$NFAST_DISTFILE" ] ; then
 PATH="\$PATH:/opt/nfast/bin"; export PATH
 EOF
 
-    cat <<EOF >$TARGETROOT/etc/rc.local
-#!/bin/sh -e
-#
-# rc.local
-#
-# This script is executed at the end of each multiuser runlevel.
-# Make sure that the script will "exit 0" on success or any other
-# value on error.
-#
-# In order to enable or disable this script just change the execution
-# bits.
-#
+    cat <<EOF >$TARGETROOT/etc/rc.local.d/nfast-compile
+#!/bin/sh
 
 LOG=/home/$USERNAME/nfast-inst.log
 
@@ -64,13 +54,10 @@ echo "Installing nCipher module..." |tee -a \$LOG
 
 echo "Modifying for persistence..." |tee -a \$LOG
 (cd /opt/nfast/ && mv kmdata kmdata.orig && ln -s /home/$USERNAME/kmdata kmdata)
-(mkdir -p /home/$USERNAME/.config/openbox && cp /etc/.config/openbox/autostart /home/$USERNAME/.config/openbox)
-(cd /home/$USERNAME && chown -R $USERNAME .config)
 
 exit 0
 EOF
 
-    chmod 755 $TARGETROOT/etc/rc.local
-
+    chmod 755 $TARGETROOT/etc/rc.local.d/nfast-compile
 
 fi
