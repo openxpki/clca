@@ -3,8 +3,8 @@ PACKAGES="$PACKAGES openbox chromium xorg"
 
 # files to install
 
-    mkdir -p $TARGETROOT/etc/.config/openbox
-    cat <<EOF >$TARGETROOT/etc/.config/openbox/autostart
+    mkdir -p $TARGETROOT/etc/xdg/openbox
+    cat <<EOF >$TARGETROOT/etc/xdg/openbox/autostart
 # Starting terminal
 xterm &
 

@@ -4,6 +4,7 @@ if [ -r "$NFAST_DISTFILE" ] ; then
     echo "nCipher driver package $NFAST_DISTFILE found, including in build process"
     USERNAME=nfast
 
+	mkdir -p config/preseed
     echo "Include nfast group in list for default user..."
     echo "debconf passwd/user-default-groups string audio cdrom dialout floppy video plugdev netdev powerdev nfast" > config/preseed/add-nfast-group
 
@@ -27,8 +28,8 @@ if [ -r "$NFAST_DISTFILE" ] ; then
     # copy documentation
     echo "Copying documentation"
     mkdir -p $TARGETROOT/opt/nfast/doc/
-    find nfast/ -path "*/document/*.pdf" -exec cp {} $TARGETROOT/opt/nfast/doc/ \;
-
+    #find nfast/ -path "*/document/*.pdf" -exec cp {} $TARGETROOT/opt/nfast/doc/ \;
+	cp $TMPDIR/nCSS-linux/document/*.pdf $TARGETROOT/opt/nfast/doc/
     rm -rf $TMPDIR/
 
     # additional packages for this addon
