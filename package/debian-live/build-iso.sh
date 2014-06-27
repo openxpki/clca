@@ -38,7 +38,7 @@ LB_OPTIONS="--iso-application $ORGANIZATION-Live-RootCA \
 [ -n "$LINUX_FLAVOUR" ] && LB_OPTIONS="$LB_OPTIONS --linux-flavours \"$LINUX_FLAVOUR\""
 [ -n "$KEYBOARD_LAYOUTS" ] && APPEND_OPTIONS="$APPEND_OPTIONS keyboard-layouts=$KEYBOARD_LAYOUTS"
 
-PACKAGES="make vim less"
+PACKAGES="make vim less dosfstools python"
 # packages for secret sharing
 #PACKAGES="$PACKAGES pciutils gcc linux-headers"
 
