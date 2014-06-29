@@ -1,3 +1,5 @@
+mkdir -p $TARGETROOT/etc/rc.local.d
+
 cat <<EOF >$TARGETROOT/etc/rc.local
 #!/bin/sh -e
 #

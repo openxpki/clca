@@ -10,8 +10,8 @@ xterm &
 
 # Open browser if index.html is provided
 
-if [ -f "/home/$USERNAME/htdocs/index.html" ]; then
-  chromium /home/$USERNAME/htdocs/index.html &
+if [ -f ~/htdocs/index.html ]; then
+  chromium ~/htdocs/index.html &
 fi
 EOF
 
