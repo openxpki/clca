@@ -81,7 +81,11 @@ echo "Generating initial configuration..."
 APPEND_OPTIONS="`eval echo $APPEND_OPTIONS`"
 echo "bootappend options: $APPEND_OPTIONS"
 
-lb config $LB_OPTIONS --bootappend-live "$APPEND_OPTIONS"
+lb config $LB_OPTIONS --bootappend-live "$APPEND_OPTIONS" | tee build.log
+if [ $? != 0 ] ; then
+	echo "ERROR: lb config failed"
+	exit 1
+fi
 
 echo "Injecting additional packages:"
 echo $PACKAGES
@@ -100,6 +104,11 @@ if [ -n "$DRYRUN" ] ; then
 fi
 
 echo "Building the ISO image (takes about 10 min with packages in cache)..."
-lb build && \
+lb build | tee -a build.log
+if [ $? != 0 ] ; then
+	echo "ERROR: lb build failed"
+	exit 1
+fi
+
 echo "Build is complete. To clean up, run 'lb clean; rm -rf ./config'"
 
