@@ -1,9 +1,8 @@
 CLCA command line CA script
-Copyright (c) 2004 - 2013 Martin Bartosch, Cynops GmbH <m.bartosch@cynops.de>
+Copyright (c) 2004 - 2014 Martin Bartosch, Cynops GmbH <m.bartosch@cynops.de>
 
 This software is distributed under the GNU General Public License - see the
 accompanying LICENSE file for more details.
-
 
 
 This is a collection of simple tools that allow for basic PKI 
@@ -12,9 +11,9 @@ requests), certificate revocation and CRL issuance.
 The script was originally designed to be used for a Root CA, but may 
 also be used for lower level CAs as well.
 
-Private key operations can either be performed in software only
-(via OpenSSL) or in software with private key operations on an
-HSM. Currently only the nCipher nFast module is supported.
+CA private keys can be held either in encrypted files (encrypted either with
+a simple passphrase or using Shamir's Secret Sharing) or stored in an HSM.
+The script was successfully tested with an Thales nCipher nShield HSM.
 
 Please note that this script does not support concurrent use of 
 multiple sessions. Unpredictable behaviour must be expected if two 
@@ -55,11 +54,12 @@ Only required for nCipher HSM support:
 - Create an operator card set that protects your root key
 - Create a root key using 'generatekey2 hwcrhk'
 
-Only required for software CA support:
+Only required for software CA support with simple passphrase:
 - create a 'private' directory in $CA_HOME
 - adapt the RSA key name in clca.cfg
 - run openssl genrsa -des3 $CA_HOME/private/<keyname>
 
+See README.keyceremony-shared-interactive for an example using Secret Sharing.
 
 
 Configuration
@@ -101,21 +101,27 @@ only once.
 
 For initial setup of a new CA the necessary steps are:
 
-- Verify if the etc/clca.cfg and etc/openssl.cnf settings are OK.
+Verify if the etc/clca.cfg and etc/openssl.cnf settings are OK.
 
-- Run
-  $ clca initialize
-  The script performes several sanity checks and refuses to overwrite
-  an existing CA. If the CA certificates have been manually removed
-  from the ca/ directory the existing CA is automatically backed up
-  to the directory attic/ and a new CA is created.
+Run
 
-  Unless you are using a HSM you will be prompted to enter 
-  the PINs protecting the CA private key during the creation of the CA.
+$ clca initialize --startdate YYMMDDHHMMSS --enddate YYMMDDHHMMSS
 
-  Once a CA has been set up, be sure to backup the CA key and the
-  certificate database. If the key is lost no new certificates or CRLs
-  can be issued.
+The script performes several sanity checks and refuses to overwrite
+an existing CA. If the CA certificates have been manually removed
+from the ca/ directory the existing CA is automatically backed up
+to the directory attic/ and a new CA is created.
+
+Startdate and enddate are specified in UTC time zone. Note that the
+year must be specified with two digits only!
+
+Unless you are using a HSM you will be prompted to enter 
+the PINs protecting the CA private key during the creation of the CA.
+
+Once a CA has been set up, be sure to backup the CA key and the
+certificate database. If the key is lost no new certificates or CRLs
+can be issued.
+
 
 
 
@@ -124,14 +130,33 @@ Signing certificate requests
 
 Call
 
-$ clca certify <request file>
+$ clca [--profile PROFILE] certify [--startdate YYMMDDHHMMSS --enddate YYMMDDHHMMSS] <request file>
 
 in order to certify a PKCS #10 request. The request format (DER/PEM)
 is automatically detected.
 
+Please note that the --profile ... option MUST be specified BEFORE the certify command!
+
+If the --profile option is omitted the issued certificate will be given the extensions
+configured for the self-signed Root. This is typically not desired for subordinate CAs
+or endentity certificates.
+
+Hence it is strongly recommended to use --profile PROFILE for the certify command.
+The sample configuration includes a section for Sub CAs, to use this section call
+
+$ clca --profile level2 certify ...
+
+The startdate and enddate options are optional and are specified in UTC time zone. 
+Note that the year must be specified with two digits only!
+If no startdate/enddate is specified the default validity from the profile is used.
+
+Omitting startdate and enddate is only recommended for end entity certificates, 
+use the explicit validity for any certificate that is used as a CA.
+
 The resulting certificate is placed in the certs/ directory. A copy
 of the most current certificate is also written to newcert.pem in the
 current working directory.
+
 
 
 Revoking certificates
@@ -168,6 +193,7 @@ This will create a new CRL and write it to the directory
 crls/YYYYMMDDHHMMSS.crl. (The capital letters are replaced with
 the current time stamp.)
 
+The CRL validity is configured in the etc/openssl.cnf file.
 
 
 Checking software integrity
