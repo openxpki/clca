@@ -3,14 +3,34 @@
 #
 
 HOME			= .
-RANDFILE		= $ENV::HOME/.rnd
 
 oid_section		= new_oids
+default_md	        = sha1
 
-#default_md	= sha1
-default_md	= sha256
+dir                     = /path/to/RootCA
+certs                   = $dir/certs
+crl_dir                 = $dir/crl
+database                = $dir/ca/index.txt
+new_certs_dir           = $dir/certs
+
+certificate             = $dir/ca/cacert.pem
+serial                  = $dir/ca/serial
+crl                     = $dir/crl/ca.crl
+crlnumber               = $dir/ca/crlnumber.txt
+
+#RANDFILE		= $ENV::HOME/.rnd
+RANDFILE                = $dir/private/.rand    # private random number file
+
+unique_subject          = no
+
+default_days	        = 1			# how long to certify for
+default_crl_days        = 365			# how long before next CRL
+preserve	        = no			# keep passed DN ordering
+
+policy                  = policy_match
 
 [ new_oids ]
+
 
 ####################################################################
 [ ca ]
@@ -18,29 +38,8 @@ default_ca	= CA_default		# The default ca section
 
 ####################################################################
 [ CA_default ]
-
-dir = /path/to/RootCA
-certs = $dir/certs
-crl_dir = $dir/crl
-database = $dir/ca/index.txt
-new_certs_dir = $dir/certs
-
-certificate = $dir/ca/cacert.pem
-serial = $dir/ca/serial
-crl = $dir/crl/ca.crl
-RANDFILE        = $dir/private/.rand    # private random number file
-
-crlnumber      = $dir/ca/crlnumber.txt
-
-x509_extensions	= cert_ext		# The extentions to add to issued certs
-
+x509_extensions	= root_ext		# The extentions to add to issued certs
 crl_extensions	= root_crl_ext
-
-default_days	= 1			# how long to certify for
-default_crl_days= 365			# how long before next CRL
-preserve	= no			# keep passed DN ordering
-
-policy		= policy_match
 
 # For the CA policy
 [ policy_match ]
@@ -52,10 +51,17 @@ domainComponent         = optional
 
 ####################################################################
 [ req ]
-# settings for 'ca initialize'
+# settings for 'ca initialize' or 'clca certify ...'
 distinguished_name	= root_dn
 prompt			= no
 x509_extensions	        = root_ext
+string_mask             = nombstr
+
+[ level2 ]
+# settings for 'clca --profile level2 certify ...'
+distinguished_name	= root_dn
+prompt			= no
+x509_extensions	        = level2_ext
 string_mask             = nombstr
 
 [ root_dn ]
@@ -70,23 +76,20 @@ subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid:always
 basicConstraints = critical,CA:true
 keyUsage = critical, cRLSign, keyCertSign
-# NOTE: this is a private OID of Cynops GmbH, if you enable this line
-# you MUST change xxxxx to YOUR enterprise OID and choose a policy oid
-# below it.
-# See http://pen.iana.org/pen/app
+# Certificate Policies OID if required
+# certificatePolicies = ia5org,1.3.6.1.4.1.xxxxx
 #certificatePolicies = ia5org,1.3.6.1.4.1.xxxxx
 
 # extensions for issued certificates
-[ cert_ext ]
+[ level2_ext ]
 subjectKeyIdentifier=hash
 authorityKeyIdentifier=keyid:always
 basicConstraints = critical,CA:true,pathlen:0
 keyUsage = critical, cRLSign, keyCertSign
-# NOTE: this is a private OID of Cynops GmbH, if you enable this line
-# you MUST change xxxxx to YOUR enterprise OID and choose a policy oid
-# below it.
-# See http://pen.iana.org/pen/app
-#certificatePolicies = ia5org,1.3.6.1.4.1.xxxxx
+# Certificate Policies OID if required
+# certificatePolicies = ia5org,1.3.6.1.4.1.xxxxx
+# CDPs (recommended for Level 2 CAs)
+# crlDistributionPoints=URI:http://example.com/openxpki/crl/root_caX.crl
 
 [ root_crl_ext ]
 # set this if you have an issuer alternative name
