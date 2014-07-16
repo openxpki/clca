@@ -6,8 +6,8 @@ cat <<EOF >$TARGETROOT/etc/rc.local.d/rc-user
 # her home directory and executes it if this is the case.
 #
 
-if [ -x $USERNAME/.rc.local ] ; then
-    $USERNAME/.rc.local
+if [ -x /home/$USERNAME/.rc.local ] ; then
+    /home/$USERNAME/.rc.local
 fi
 exit 0
 EOF
