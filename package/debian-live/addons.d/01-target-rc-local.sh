@@ -22,3 +22,5 @@ if [ -d /etc/rc.local.d ] ; then
 fi
 exit 0
 EOF
+
+chmod 755 $TARGETROOT/etc/rc.local

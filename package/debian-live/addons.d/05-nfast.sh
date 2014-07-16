@@ -6,12 +6,19 @@ if [ -r "$NFAST_DISTFILE" ] ; then
 
     # additional packages for this addon
     PACKAGES="$PACKAGES pciutils build-essential module-assistant"
-    case $ARCHITECTURE in
+
+    if [ -n "$ARCHITECTURE" ] ; then
+        ARCH=$ARCHITECTURE
+    else
+        ARCH=`uname -m`
+    fi
+
+    case $ARCH in
         amd64|x86_64)
             PACKAGES="$PACKAGES linux-headers-amd64"
             ;;
         *)
-            echo "ERROR: unsupported architecture $ARCHITECTURE. Please handle this case in the ncipher addons file"
+            echo "ERROR: unsupported architecture $ARCH. Please handle this case in the ncipher addons file"
             exit 1
             ;;
     esac

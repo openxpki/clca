@@ -15,19 +15,6 @@ PACKAGES=""
 
 #DRYRUN=1
 
-if [ -z "$ARCHITECTURE" ] ; then
-    ARCHITECTURE=`uname -m`
-fi
-
-case $ARCHITECTURE in
-    x86_64)
-        ARCHITECTURE=amd64
-        ;;
-    i686)
-        ARCHITECTURE=i386
-        ;;
-esac
-
 DISTRIBUTION=`lsb_release -c | awk '{ print $2 }'`
 if [ $? != 0 ] ; then
     echo "ERROR: could not run lsb_release"
