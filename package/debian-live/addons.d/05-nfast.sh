@@ -4,7 +4,19 @@ if [ -r "$NFAST_DISTFILE" ] ; then
     echo "nCipher driver package $NFAST_DISTFILE found, including in build process"
     USERNAME=nfast
 
-	mkdir -p config/preseed
+    # additional packages for this addon
+    PACKAGES="$PACKAGES pciutils build-essential module-assistant"
+    case $ARCHITECTURE in
+        amd64|x86_64)
+            PACKAGES="$PACKAGES linux-headers-amd64"
+            ;;
+        *)
+            echo "ERROR: unsupported architecture $ARCHITECTURE. Please handle this case in the ncipher addons file"
+            exit 1
+            ;;
+    esac
+
+    mkdir -p config/preseed
     echo "Include nfast group in list for default user..."
     echo "debconf passwd/user-default-groups string audio cdrom dialout floppy video plugdev netdev powerdev nfast" > config/preseed/add-nfast-group
 
@@ -28,15 +40,11 @@ if [ -r "$NFAST_DISTFILE" ] ; then
     # copy documentation
     echo "Copying documentation"
     mkdir -p $TARGETROOT/opt/nfast/doc/
-    #find nfast/ -path "*/document/*.pdf" -exec cp {} $TARGETROOT/opt/nfast/doc/ \;
-	cp $TMPDIR/nCSS-linux/document/*.pdf $TARGETROOT/opt/nfast/doc/
+    find $TMPDIR -type f  -name '*.pdf' -exec cp {} $TARGETROOT/opt/nfast/doc/ \;
     rm -rf $TMPDIR/
 
-    # additional packages for this addon
-    PACKAGES="$PACKAGES pciutils gcc"
-
     mkdir -p $TARGETROOT/etc/profile.d/
-    cat <<EOF >$TARGETROOT/etc/profile.d/nfast-path
+    cat <<EOF >$TARGETROOT/etc/profile.d/nfast-path.sh
 PATH="\$PATH:/opt/nfast/bin"; export PATH
 EOF
 
@@ -48,7 +56,7 @@ LOG=/home/$USERNAME/nfast-inst.log
 echo "Configuring nCipher module for building..." > \$LOG
 (cd /opt/nfast/driver && ./configure) 2>&1 |tee -a \$LOG
 echo "Building nCipher module..." |tee -a \$LOG
-(cd /opt/nfast/driver && make) 2>&1 |tee -a \$LOG
+(cd /opt/nfast/driver && make && make install) 2>&1 |tee -a \$LOG
 echo "Installing nCipher module..." |tee -a \$LOG
 /opt/nfast/sbin/install 2>&1 | tee -a \$LOG
 
