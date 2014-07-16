@@ -1,5 +1,5 @@
 # additional packages for this addon
-PACKAGES="$PACKAGES openbox chromium xorg"
+PACKAGES="$PACKAGES openbox chromium xorg mupdf"
 
 # files to install
 

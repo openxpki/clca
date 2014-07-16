@@ -69,7 +69,7 @@ BASE=../..
 mkdir -p $TARGETROOT
 
 # base packages
-PACKAGES="make vim less pandoc mupdf dosfstools python"
+PACKAGES="make vim less pandoc dosfstools python"
 
 echo "Installing addons..."
 if [ -d "addons.d" ]; then
