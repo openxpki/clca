@@ -6,10 +6,14 @@ GIT_COMMIT=`git rev-list --max-count=1 HEAD`
 GIT_DESCRIPTION=`git describe`
 
 # show clca version in /etc/clca_version
+mkdir -p $TARGETROOT/etc
+
 cat <<EOF >$TARGETROOT/etc/clca_version
 $TITLE
-Built from git commit $GIT_COMMIT
+
+Build date: $BUILD_TIMESTAMP
 Git description: $GIT_DESCRIPTION
+Git commit: $GIT_COMMIT
 EOF
 
 # customize boot screen
