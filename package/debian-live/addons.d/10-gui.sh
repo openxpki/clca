@@ -1,5 +1,8 @@
 # additional packages for this addon
-PACKAGES="$PACKAGES openbox chromium xorg mupdf"
+PACKAGES="$PACKAGES openbox chromium xorg"
+PACKAGES="$PACKAGES mupdf xli"
+# I am an emacs guy
+PACKAGES="$PACKAGES emacs"
 
 # files to install
 
@@ -9,9 +12,13 @@ PACKAGES="$PACKAGES openbox chromium xorg mupdf"
 xterm &
 
 # Open browser if index.html is provided
-
 if [ -f ~/htdocs/index.html ]; then
   chromium ~/htdocs/index.html &
+fi
+
+# load background image if available in user home
+if [ -f ~/.xrootimage.png ] ; then
+    xli -onroot -fillscreen ~/.xrootimage.png
 fi
 EOF
 

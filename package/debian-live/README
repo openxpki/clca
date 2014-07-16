@@ -25,3 +25,16 @@ generated ISO.
 In addition, the default user is changed from "user" to "nfast" to
 make HSM operations easier for the operator.
 
+## Customizing options
+
+### Custom startup exection
+
+If the user's (persistent) home directory contains an executable file
+~/.rc.local it will be executed **as root** on startup.
+
+### Custom background image
+
+If the user's (persistent) home directory contains the file .xrootimage.png
+it will be displayed on the background of the graphical environment.
+
+

@@ -62,7 +62,7 @@ echo "Installing addons..."
 if [ -d "addons.d" ]; then
    for i in addons.d/*.sh; do
       if [ -r $i ]; then
-         echo "* $i"
+         echo "* Addon: $i"
          . $i
       fi
    done
@@ -104,7 +104,7 @@ if [ -n "$DRYRUN" ] ; then
 fi
 
 echo "Building the ISO image (takes about 10 min with packages in cache)..."
-lb build | tee -a build.log
+lb build 2>&1 | tee -a build.log
 if [ $? != 0 ] ; then
 	echo "ERROR: lb build failed"
 	exit 1
