@@ -123,7 +123,7 @@ fi
 
 ######################################################################
 
-VERSION="0.9"
+VERSION="1.0"
 
 showhelp()
 {
@@ -138,7 +138,7 @@ Available commands:
   help <command>        - Show help for specified command
 
   list			- List certificates
-  issue_crl		- Issue CRL
+  issuecrl		- Issue CRL
   certify		- Sign certificate request
   genkey		- Generate (end entity) key
   revoke		- Revoke certificate
@@ -158,9 +158,9 @@ If <filter> is not specified all certificates are displayed.
 
 EOF
 	    ;;
-	issue_crl)
+	issue_crl|issuecrl)
 	    $CAT <<EOF
-Usage: clca [--profile <name>] issue_crl
+Usage: clca [--profile <name>] issuecrl
 
 Issues a new CRL with default validity. The resulting CRL will
 be stored as $CRLDIR/YYYYMMDDHHMMSS.crl. 
@@ -1074,6 +1074,10 @@ fi
 CMD=`echo $CMD | $SED -e 's/^_//'`
 
 case "$CMD" in
+    issuecrl)
+        # call legacy function name
+        CMD=issue_crl
+        ;;
     issue_crl|certify|genkey|revoke|list|initialize|check|backup|modifycnf)
         :
 	;;
