@@ -25,6 +25,21 @@ generated ISO.
 In addition, the default user is changed from "user" to "nfast" to
 make HSM operations easier for the operator.
 
+## Persistence
+
+Persistence is explained in sectioni 10.3 of the Debian Live manual.
+See http://live.debian.net/manual/3.x/html/live-manual.en.html#529
+
+In short:
+
+- create a vfat partition on a different memory stick (or the same memory stick the Live CD is installed on)
+- create a sparse file named persistence in the top directory of the vfat partition
+- mkfs.ext4 -F persistence
+- mount -t ext4 persistence /mnt
+- echo "/home" >/mnt/persistence.conf
+- umount /mnt
+
+
 ## Customizing options
 
 ### Custom startup exection
