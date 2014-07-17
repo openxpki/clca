@@ -37,11 +37,13 @@ if [ -r "$NFAST_DISTFILE" ] ; then
     mkdir -p $TARGETROOT/usr/bin
 
     for nfast_pkg in hwsp hwcrhk ctls ; do
-        TARBALL=`find $TMPDIR/ -type f -path "*/$nfast_pkg/*.tar"`
-        if [ -r "$TARBALL" ] ; then
-            echo "Installing $nfast_pkg"
-            tar xf $TARBALL -C $TARGETROOT/
-        fi
+        TARBALLS=`find $TMPDIR/ -type f -path "*/$nfast_pkg/*.tar"`
+        for file in $TARBALLS ; do
+            if [ -r "$file" ] ; then
+                echo "Installing $nfast_pkg ($file)"
+                tar xf $file -C $TARGETROOT/
+            fi
+        done
     done
 
     # copy documentation
