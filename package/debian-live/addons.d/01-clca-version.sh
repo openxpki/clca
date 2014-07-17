@@ -3,7 +3,7 @@
 TITLE="CLCA Live Root CD"
 BUILD_TIMESTAMP=`date +"%F %T%z"`
 GIT_COMMIT=`git rev-list --max-count=1 HEAD`
-GIT_DESCRIPTION=`git describe`
+GIT_DESCRIPTION=`git describe --tags`
 
 # show clca version in /etc/clca_version
 mkdir -p $TARGETROOT/etc
