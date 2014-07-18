@@ -62,6 +62,11 @@ EOF
 
 LOG=/home/$USERNAME/nfast-inst.log
 
+if [ -e /etc/init.d/nc_hardserver ] ; then
+    echo "nCipher software already installed. Skipping." > \$LOG
+    exit 0
+fi
+
 echo "Configuring nCipher module for building..." > \$LOG
 (cd /opt/nfast/driver && ./configure) 2>&1 |tee -a \$LOG
 echo "Building nCipher module..." |tee -a \$LOG
