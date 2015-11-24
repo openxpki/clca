@@ -13,7 +13,10 @@ also be used for lower level CAs as well.
 
 CA private keys can be held either in encrypted files (encrypted either with
 a simple passphrase or using Shamir's Secret Sharing) or stored in an HSM.
-The script was successfully tested with an Thales nCipher nShield HSM.
+
+The script was successfully tested with 
+- Thales nCipher nShield HSM
+- Gemalto SafeNet Luna SA HSM
 
 Please note that this script does not support concurrent use of 
 multiple sessions. Unpredictable behaviour must be expected if two 
@@ -53,6 +56,14 @@ Only required for nCipher HSM support:
 - Create an administrator card set
 - Create an operator card set that protects your root key
 - Create a root key using 'generatekey2 hwcrhk'
+
+Only required for Gemalto SafeNet Luna SA HSM support:
+- Install HSM drivers
+- Establish trust link to Luna SA HSM
+- Obtain Gamalto SafeNet support document DOW4073 (or newer document containing the OpenSSL 
+  gem engine)
+- Install OpenSSL Engine and sautil command line tool
+
 
 Only required for software CA support with simple passphrase:
 - create a 'private' directory in $CA_HOME

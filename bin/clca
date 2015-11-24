@@ -52,10 +52,12 @@ trap traphandler 2 3
 # return 0 means that a passphrase has been echoed to stdout
 # return 1 means that no passphrase is to be used
 get_passphrase() {
-    local TMP
-    echo -n "Enter passphrase: " >&2
-    read -s TMP
-    echo $TMP
+    if [ "$ENGINE" = "openssl" ] ; then
+        local TMP
+        echo -n "Enter passphrase: " >&2
+        read -s TMP
+        echo $TMP
+    fi
 }
 
 # make sure get_passphrase is only called once
@@ -779,6 +781,9 @@ initialize()
 		fi
 	    done ) `
 	    ;;
+        gem)
+            FOUND=1
+            ;;
 	openssl)
 	    if [ -r $CAPRIVDIR/$ROOTKEYNAME ] ; then
 		FOUND=1
