@@ -25,6 +25,17 @@ generated ISO.
 In addition, the default user is changed from "user" to "nfast" to
 make HSM operations easier for the operator.
 
+### Luna SA support
+The addon script addons.d/50-luna-hsm.sh scans for SafeNet Luna HSM drivers
+in the directory luna/ in this directory.
+Place the contents of the directory luna_hsm/drivers/linux/64/ in this
+directory.
+
+Obtain the support file 
+*OPENSSL_TOOLKIT_LunaSA_*.tar
+and also copy it to this directory. As of this writing (2015-11-29)
+this support document can be obtained from SafeNet via document ID DOW4073.
+
 ## Persistence
 
 Persistence is explained in sectioni 10.3 of the Debian Live manual.

@@ -90,7 +90,8 @@ cd /usr/safenet/SOFTWARE
 
 echo "Modifying for persistence..." |tee -a \$LOG
 
-mkdir -p /home/$USERNAME/luna/cert
+mkdir -p /home/$USERNAME/luna/cert/server
+mkdir -p /home/$USERNAME/luna/cert/client
 chown -R $USERNAME /home/$USERNAME/luna/
 
 (cd /usr/safenet/lunaclient/ && mv cert cert.orig && ln -s /home/$USERNAME/luna/cert cert)
