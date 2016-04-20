@@ -64,6 +64,14 @@ prompt			= no
 x509_extensions	        = level2_ext
 string_mask             = nombstr
 
+[ endentity ]
+# settings for 'clca --profile endentity --subject "/DC=org/DC=openxpki/O=OpenXPKI/CN=example.openxpki.org" certify ...'
+distinguished_name	= root_dn
+prompt			= no
+x509_extensions	        = endentity_ext
+string_mask             = nombstr
+
+
 [ root_dn ]
 countryName            = DE
 organizationName       = OpenXPKI
@@ -90,6 +98,18 @@ keyUsage = critical, cRLSign, keyCertSign
 # certificatePolicies = ia5org,1.3.6.1.4.1.xxxxx
 # CDPs (recommended for Level 2 CAs)
 # crlDistributionPoints=URI:http://example.com/openxpki/crl/root_caX.crl
+
+# extensions for issued certificates
+[ endentity_ext ]
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid:always
+basicConstraints = critical,CA:false
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+# Certificate Policies OID if required
+# certificatePolicies = ia5org,1.3.6.1.4.1.xxxxx
+# CDPs (recommended for Level 2 CAs)
+# crlDistributionPoints=URI:http://example.com/openxpki/crl/level2_caX.crl
 
 [ root_crl_ext ]
 # set this if you have an issuer alternative name

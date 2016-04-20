@@ -275,7 +275,7 @@ The following steps must be performed to create a CA:
    be generated using the HSM utilities. Otherwise you will need
    to create a private key by issuing
 
-   openssl genrsa -des3 -out $CAPRIVDIR/cakey.pem 2048 $CONFIGARG
+   openssl genrsa -aes256 -out $CAPRIVDIR/cakey.pem 2048 $CONFIGARG
    chmod 400 $CAPRIVDIR/cakey.pem
 
 3. Create the CA using the initialize command
@@ -802,7 +802,7 @@ initialize()
 	    openssl)
 		echo "Hint:"
 		echo "mkdir $CAPRIVDIR"
-		echo "openssl genrsa -des3 -out $CAPRIVDIR/$ROOTKEYNAME 2048 $CONFIGARG"
+		echo "openssl genrsa -aes256 -out $CAPRIVDIR/$ROOTKEYNAME 2048 $CONFIGARG"
 		echo "chmod 400 $CAPRIVDIR/$ROOTKEYNAME"
 		;;
 	    chil)
