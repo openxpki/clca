@@ -5,7 +5,7 @@
 HOME			= .
 
 oid_section		= new_oids
-default_md	        = sha1
+default_md	        = sha256
 
 dir                     = /path/to/RootCA
 certs                   = $dir/certs

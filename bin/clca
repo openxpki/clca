@@ -713,7 +713,7 @@ issue_crl()
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
     
-    $HSM_PRELOAD $OPENSSL ca -gencrl -md sha1 $KEYARG $OPENSSLOPT $PROFILEARG -out $CRLFILE $CONFIGARG
+    $HSM_PRELOAD $OPENSSL ca -gencrl -md sha256 $KEYARG $OPENSSLOPT $PROFILEARG -out $CRLFILE $CONFIGARG
     if [ $? != 0 ] ; then
 	echo "ERROR: Could not issue CRL."
 	$RM -f $CRLFILE
