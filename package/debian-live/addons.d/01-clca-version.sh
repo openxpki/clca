@@ -16,6 +16,12 @@ Git description: $GIT_DESCRIPTION
 Git commit: $GIT_COMMIT
 EOF
 
+cat <<EOF >$TARGETROOT/etc/bash.bashrc
+if [ -n "\$PS1" ] ; then
+    cat /etc/clca_version
+fi
+EOF
+
 # customize boot screen
 mkdir -p config/includes/binary/isolinux
 
