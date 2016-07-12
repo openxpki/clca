@@ -1,0 +1,39 @@
+--- install-batch.sh.orig	2016-07-12 14:52:41.625455766 +0200
++++ install-batch.sh	2016-07-12 14:51:01.371377847 +0200
+@@ -41,7 +41,7 @@
+
+ # Used for Luna Products selection
+ # By default no Luna Product will be installed
+-LUNA_SA_SELECTED=" "
++LUNA_SA_SELECTED="*"
+ LUNA_PCI_SELECTED=" "
+ LUNA_G5_SELECTED=" "
+ LUNA_REM_BACKUP_HSM_SELECTED=" "
+@@ -77,6 +77,7 @@
+ update_install=0
+
+ prompt_yes_no() {
++return 0
+     rsp=""
+     while [ "$rsp" != "y" ] && [ "$rsp" != "n" ] && [ "$rsp" != "yes" ] && [ "$rsp" != "no" ]
+     do
+@@ -1459,7 +1460,8 @@
+ while [ $product_selected -ne 1 ]
+ do
+     prompt_for_products "$option"
+-    read option
++    #read option
++    option="n"
+     STATUS=""
+
+     if [ "$option" = "q" ] || [ "$option" = "Q" ] ; then
+@@ -1500,7 +1502,8 @@
+     fi
+
+     prompt_for_components "$option"
+-    read option
++    #read option
++    option="i"
+ done;
+ }
+
