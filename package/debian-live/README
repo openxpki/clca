@@ -39,7 +39,7 @@ this support document can be obtained from SafeNet via document ID DOW4073.
 ## Persistence
 
 Persistence is explained in sectioni 10.3 of the Debian Live manual.
-See http://live.debian.net/manual/3.x/html/live-manual.en.html#529
+See https://debian-live.alioth.debian.org/live-manual/stable/manual/html/live-manual.en.html#556
 
 In short:
 
