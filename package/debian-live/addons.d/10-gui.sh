@@ -8,8 +8,6 @@ PACKAGES="$PACKAGES emacs"
 
     mkdir -p $TARGETROOT/etc/xdg/openbox
     cat <<EOF >$TARGETROOT/etc/xdg/openbox/autostart
-# Starting terminal
-xterm &
 
 # Open browser if index.html is provided
 if [ -f ~/htdocs/index.html ]; then

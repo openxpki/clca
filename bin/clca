@@ -191,7 +191,7 @@ EOF
 		;;
 	certify)
 	    $CAT <<EOF
-Usage: clca [--profile <name>] certify [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS] [--reqformat P10|SSCERT] [--subject <subject>] <request file>
+Usage: clca [--profile <name>] certify [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS] [--reqformat P10|SSCERT] [--subject <subject>] [--batch] <request file>
 
 Signs a PKCS#10 certificate request (DER/PEM format is automatically
 detected). Certificate profile and validity is determined by 
@@ -220,6 +220,9 @@ the certificate's lifetime. The dates must be specified in the format
 YYMMDDHHMMSS and are interpreted as UTC times.
 If --startdate/--enddate are not specified the default certificate 
 validity is used.
+
+If --batch is specified the underlying openssl commmand will be called
+in batch mode (useful for calling in shell scripts).
 
 EOF
 	    ;;
@@ -460,6 +463,10 @@ certify()
 		shift
 		shift
 		;;
+            --batch)
+                BATCH="-batch"
+                shift
+                ;;
 	    *)
 		REQ="$1"
 		shift
@@ -714,7 +721,7 @@ issue_crl()
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
     
-    $HSM_PRELOAD $OPENSSL ca -gencrl -md sha256 $KEYARG $OPENSSLOPT $PROFILEARG -out $CRLFILE $CONFIGARG
+    $HSM_PRELOAD $OPENSSL ca -gencrl $KEYARG $OPENSSLOPT $PROFILEARG -out $CRLFILE $CONFIGARG
     if [ $? != 0 ] ; then
 	echo "ERROR: Could not issue CRL."
 	$RM -f $CRLFILE
