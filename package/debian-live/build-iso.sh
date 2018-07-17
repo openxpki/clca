@@ -22,7 +22,12 @@ if [ $? != 0 ] ; then
 fi
 
 case $DISTRIBUTION in
-    jessie)
+    stretch)
+        echo "Building for Debian Stretch"
+        APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent username=\$USERNAME hostname=\$HOSTNAME"
+	TARGETROOT=config/includes.chroot
+        ;;
+     jessie)
         echo "Building for Debian Jessie"
         APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent username=\$USERNAME hostname=\$HOSTNAME"
 	TARGETROOT=config/includes.chroot
