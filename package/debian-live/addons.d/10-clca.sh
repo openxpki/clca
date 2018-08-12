@@ -5,7 +5,7 @@ PACKAGES="$PACKAGES openssl"
 # smartcard support
 PACKAGES="$PACKAGES opensc libccid libengine-pkcs11-openssl"
 # yubikey personalization
-PACKAGES="$PACKAGES yubikey-personalization"
+PACKAGES="$PACKAGES yubikey-personalization yubikey-personalization-gui yubico-piv-tool ykcs11"
 # gnupg-agent
 PACKAGES="$PACKAGES gnupg-agent"
 # java and bouncy castle
