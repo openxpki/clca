@@ -22,7 +22,12 @@ if [ $? != 0 ] ; then
 fi
 
 case $DISTRIBUTION in
-    jessie)
+    stretch)
+        echo "Building for Debian Stretch"
+        APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent username=\$USERNAME hostname=\$HOSTNAME"
+	TARGETROOT=config/includes.chroot
+        ;;
+     jessie)
         echo "Building for Debian Jessie"
         APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent username=\$USERNAME hostname=\$HOSTNAME"
 	TARGETROOT=config/includes.chroot
@@ -61,7 +66,7 @@ BASE=../..
 mkdir -p $TARGETROOT
 
 # base packages
-PACKAGES="make vim less pandoc dosfstools python"
+PACKAGES="make vim less pandoc dosfstools python perl-doc cryptsetup"
 
 echo "Installing addons..."
 if [ -d "addons.d" ]; then
