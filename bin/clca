@@ -178,7 +178,7 @@ section from openssl.cnf for CRL generation instead of the CA default.
 EOF
 	    ;;
 	genkey)
-	$CAT <<EOF
+	    $CAT <<EOF
 Usage: clca genkey [--bits <numbits>] [--enc des3|aes128|aes192|aes256] <name of keyfile>
 
 Generates a rsa key and writes it to private/<name of keyfile>.pem
@@ -395,9 +395,9 @@ genkey()
 		abort 1
     fi
 
-	BITS=2048	
-
- 	while [ -n "$1" ] ; do
+    BITS=2048	
+    
+    while [ -n "$1" ] ; do
 	case "$1" in
 	    --bits)
 		BITS="$2"
@@ -467,6 +467,10 @@ certify()
                 BATCH="-batch"
                 shift
                 ;;
+            --help)
+		showhelp certify
+		abort 1
+		;;
 	    *)
 		REQ="$1"
 		shift
@@ -597,20 +601,34 @@ certify()
 ######################################################################
 revoke()
 {
-    if [ "$1" = "" ] ; then
+    ID=""
+    while [ -n "$1" ] ; do
+	case "$1" in
+	    --help)
+		showhelp revoke
+		abort 1
+		;;
+	    *)
+		ID=$1
+		shift
+		;;
+	esac
+    done
+	    
+    if [ "$ID" = "" ] ; then
 	showhelp revoke
-	abort 0
+	abort 1
     fi
 
-    FOUND=$((`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$1\>" | wc -l`))
+    FOUND=$((`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$ID\>" | wc -l`))
 
     case $FOUND in
 	0)
-	    echo "No matching valid certificate found for serial number '$1'"
+	    echo "No matching valid certificate found for serial number '$ID'"
 	    abort 0
 	    ;;
 	1)
-	    SERIAL=`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$1\>" | $CUT -f2`
+	    SERIAL=`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$ID\>" | $CUT -f2`
 	    if [ -r $CERTDIR/$SERIAL.pem ] ; then
 		echo "Revoking certificate with serial number '$SERIAL':"
 		
@@ -656,20 +674,40 @@ revoke()
 ######################################################################
 list()
 {
-    FILTER="" # default: all certs
-    case "$1" in
-	valid)
+    FILTER=""
+    while [ -n "$1" ] ; do
+	case "$1" in
+	    --help)
+		showhelp list
+		abort 1
+		;;
+	    valid|--valid)
+		FILTER="V"
+		shift
+		;;
+	    revoked|--revoked)
+		FILTER="R"
+		shift
+		;;
+	    *)
+		showhelp list
+		abort 1
+		;;
+	esac
+    done
+    
+    case "$FILTER" in
+	V)
 	    echo "Filter: Only valid certificates"
-	    FILTER="V"
 	    ;;
-	revoked)
+	R)
 	    echo "Filter: Only revoked certificates"
-	    FILTER="R"
 	    ;;
 	*)
-	    echo "Filter: all certificates"
+	    echo "Filter: All certificates"
 	    ;;
     esac
+	
 
     $CUT -f1,4 <$CADBDIR/index.txt | ( while read status serial ; do
 	    if [ "$FILTER" = "" -o "$FILTER" = "$status" ] ; then
@@ -703,6 +741,19 @@ list()
 # issue CRL
 issue_crl()
 {
+    while [ -n "$1" ] ; do
+	case "$1" in
+	    --help)
+		showhelp issuecrl
+		abort 1
+		;;
+	    *)
+		showhelp issuecrl
+		abort 1
+		;;
+	esac
+    done
+
     echo "Issuing new CRL..."
     
     # determine filename
@@ -766,9 +817,13 @@ initialize()
 		shift
 		shift
 		;;
+	    --help)
+		showhelp initialize
+		abort 1
+		;;
 	    *)
 		showhelp initialize
-		abort 0
+		abort 1
 		;;
 	esac
     done
@@ -1007,6 +1062,19 @@ EOF
 
 check() 
 {
+    while [ -n "$1" ] ; do
+	case "$1" in
+	    --help)
+		showhelp check
+		abort 1
+		;;
+	    *)
+		showhelp check
+		abort 1
+		;;
+	esac
+    done
+
     echo "MD5 check sums for config files:"
     for i in $CFG $CNF ; do
 	$MD5SUM $i
@@ -1029,13 +1097,25 @@ check()
 
 backup() 
 {
+    FILENAME=""
+    while [ -n "$1" ] ; do
+	case "$1" in
+	    --help)
+		showhelp backup
+		abort 1
+		;;
+	    *)
+		FILENAME="$1"
+		shift
+		;;
+	esac
+    done
+
     echo "Backup CA configuration and database"
     
-    if [ "$1" = "" ] ; then
+    if [ "$FILENAME" = "" ] ; then
 	TIMESTAMP=`$DATE +%Y%m%d%H%M%S`
 	FILENAME="$TIMESTAMP-clca-backup.tar.gz"
-    else 
-	FILENAME="$1"
     fi
     if [ -e "$FILENAME" ] ; then
 	echo "ERROR: File $FILENAME already exists. Aborted."
@@ -1111,7 +1191,7 @@ case "$CMD" in
 	else
 	    showhelp $1
 	fi
-	abort 0
+	abort 1
 	;;
     *)
 	echo "Unknown invocation mode '$CMD'"
