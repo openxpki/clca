@@ -22,6 +22,7 @@ crlnumber               = $dir/ca/crlnumber.txt
 RANDFILE                = $dir/private/.rand    # private random number file
 
 unique_subject          = no
+email_in_dn             = no
 
 default_days	        = 1			# how long to certify for
 default_crl_days        = 365			# how long before next CRL
@@ -59,14 +60,12 @@ string_mask             = nombstr
 
 [ level2 ]
 # settings for 'clca --profile level2 certify ...'
-distinguished_name	= root_dn
 prompt			= no
 x509_extensions	        = level2_ext
 string_mask             = nombstr
 
 [ endentity ]
 # settings for 'clca --profile endentity --subject "/DC=org/DC=openxpki/O=OpenXPKI/CN=example.openxpki.org" certify ...'
-distinguished_name	= root_dn
 prompt			= no
 x509_extensions	        = endentity_ext
 string_mask             = nombstr

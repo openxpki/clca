@@ -5,6 +5,7 @@
 # Copyright (c) 2004-2013 Martin Bartosch, Cynops GmbH
 #
 # 2004-04-26 Martin Bartosch; Cynops GmbH <m.bartosch@cynops.de>
+# 2018 Martin Bartosch; White Rabbit Security GmbH
 #
 # This software is distributed under the GNU General Public License - see the
 # accompanying LICENSE file for more details.
@@ -134,7 +135,7 @@ showhelp()
 	    $CAT <<EOF
 CLI CA version $VERSION
 
-Usage: clca [--profile <name>] <command> [arguments]
+Usage: clca <command> [arguments]
 
 Available commands:
   help <command>        - Show help for specified command
@@ -162,7 +163,7 @@ EOF
 	    ;;
 	issue_crl|issuecrl)
 	    $CAT <<EOF
-Usage: clca [--profile <name>] issuecrl
+Usage: clca issuecrl
 
 Issues a new CRL with default validity. The resulting CRL will
 be stored as $CRLDIR/YYYYMMDDHHMMSS.crl. 
@@ -172,8 +173,7 @@ The CRL is written in PEM format and may be converted to DER
 using the command
 openssl crl -in $CRLDIR/ca.crl -out $CRLDIR/cacrl.der -outform der
 
-If --profile <name> is specified the CA script uses the specified
-section from openssl.cnf for CRL generation instead of the CA default.
+The issuecrl command uses the default_ca section as specified in openssl.cnf.
 
 EOF
 	    ;;
@@ -191,29 +191,32 @@ EOF
 		;;
 	certify)
 	    $CAT <<EOF
-Usage: clca [--profile <name>] certify [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS] [--reqformat P10|SSCERT] [--subject <subject>] [--batch] <request file>
+Usage: clca certify --profile <name> [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS] [--reqformat P10|SSCERT] [--subject <subject>] [--batch] <request file>
 
 Signs a PKCS#10 certificate request (DER/PEM format is automatically
-detected). Certificate profile and validity is determined by 
+detected). Certificate extensions and validity are determined by 
 settings in openssl.cnf.
-The certificate request data will be used verbatim in the 
-certification process.
+The certificate Subject DN from the request data will be used verbatim 
+in the certification process unless explicitly overridden via --subject.
+
+The certificate profile to use for signing the certificate must be 
+specified via --profile <name>. The specified argument corresponds to
+a section in the openssl.cnf file.
+If no --profile is specified the script prints the list of certificate
+profiles available for the certify command and exits.
+
+(NOTE: In order to qualify as a valid --profile the openssl.cnf file 
+section must include x509_extensions and must not include crl_extensions 
+nor a distinguished_name.)
 
 If --reqformat SSCERT is specified then the input file should be
 a self-signed certificate that will be used instead of a PKCS#10 request
 (which is the default).
 
-If a certificate subject is specified via --subject <subject> then
-the subject contained in the request is overridden using the given
-subject.
-
 After certification is performed the new certificate is copied to
 the directory $CERTDIR. 
 The certificate database is updated and a copy of the certificate 
 is written to the file 'newcert.pem' in the current directory.
-
-If --profile <name> is specified the CA script uses the specified
-section from openssl.cnf for certification instead of the CA default.
 
 If --startdate or --enddate are specified, these dates are used for
 the certificate's lifetime. The dates must be specified in the format
@@ -433,18 +436,25 @@ certify()
 	showhelp certify
 	abort 1
     fi
-
+    
+    PROFILE=""
+    
     REQFORMAT="P10"
     while [ -n "$1" ] ; do
 	case "$1" in
-	    --startdate)
+	    --profile)
+		PROFILE="$2"
+		shift
+		shift
+		;;
+	    --startdate|--notbefore)
 		# append "Z" for UTC time
 		STARTDATE="$2"
 		STARTDATE="${STARTDATE%%Z*}Z"
 		shift
 		shift
 		;;
-	    --enddate)
+	    --enddate|--notafter)
 		# append "Z" for UTC time
 		ENDDATE="$2"
 		ENDDATE="${ENDDATE%%Z*}Z"
@@ -477,6 +487,24 @@ certify()
 		;;
 	esac
     done
+
+    if [ -z "$PROFILE" ] ; then
+	echo "ERROR: --profile missing"
+	echo
+	echo "Available profiles:"
+	get_certificate_profiles
+	echo
+	abort 1
+    fi
+
+    if [ "`get_certificate_profiles $PROFILE`" != "1" ] ; then
+	echo "ERROR: invalid --profile specified."
+	echo
+	echo "Available profiles:"
+	get_certificate_profiles
+	echo
+	abort 1
+    fi
 
     if [ ! -r "$REQ" ] ; then
 	echo "ERROR: Could not read certificate request $REQ"
@@ -586,7 +614,7 @@ certify()
     fi
 
     # Note: set 'BATCH=-batch' to cause openssl to run in batch mode
-    eval $HSM_PRELOAD $OPENSSL ca $BATCH $KEYARG $OPENSSLOPT $PROFILEARG $VALIDITY $SUBJECT -cert $CACERT -out newcert.pem -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
+    eval $HSM_PRELOAD $OPENSSL ca $BATCH $KEYARG $OPENSSLOPT -name $PROFILE $VALIDITY $SUBJECT -cert $CACERT -out newcert.pem -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
 
     if [ "$?" != 0 ] ; then
 	echo "ERROR: Certification failed."
@@ -651,7 +679,7 @@ revoke()
 		fi
 
 
-		$HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT $PROFILEARG -revoke $CERTDIR/$SERIAL.pem $CONFIGARG
+		$HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -revoke $CERTDIR/$SERIAL.pem $CONFIGARG
 		if [ $? != 0 ] ; then
 		    echo "ERROR: Could not revoke certificate."
 		    abort 1
@@ -772,7 +800,7 @@ issue_crl()
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
     
-    $HSM_PRELOAD $OPENSSL ca -gencrl $KEYARG $OPENSSLOPT $PROFILEARG -out $CRLFILE $CONFIGARG
+    $HSM_PRELOAD $OPENSSL ca -gencrl $KEYARG $OPENSSLOPT -out $CRLFILE $CONFIGARG
     if [ $? != 0 ] ; then
 	echo "ERROR: Could not issue CRL."
 	$RM -f $CRLFILE
@@ -1135,6 +1163,54 @@ modifycnf()
     modify_cnf $CNF
 }
 
+get_certificate_profiles() {
+    # this inline script iterates through the OpenSSL configuration and 
+    # extracts all sections which satisfy the following conditions:
+    # - contained in a regular OpenSSL section: [ Foo ]
+    # - section includes x509_extensions
+    # - section does not include crl_extensions (only useful for issuing CAs on the CA level)
+    # - section does not include a DN (only useful request generation)
+    #
+    # Arguments:
+    # $1 - if empty: print list of profiles
+    #      if specified: if profile exists, print profile, otherwise no output
+
+    perl -n -e '
+        BEGIN {
+            $wanted_profile = shift;
+        }
+        chomp;
+        next if (/^\s*#/);
+        if (/\[\s*(.*?)\s*\]/) { 
+            $section = $1
+        }
+        if (/x509_extensions/) { 
+            $has_x509_extensions = 1
+        }
+        if (/crl_extensions/) { 
+            $has_crl_extensions = 1
+        }
+        if (/distinguished_name/) { 
+            $has_dn = 1
+        }
+        if ($lastsection ne $section) {
+            if ($has_x509_extensions && ! $has_crl_extensions && ! $has_dn) {
+                push @sections, $lastsection;
+            }
+            $has_x509_extensions = 0;
+            $has_crl_extensions = 0;
+            $has_dn = 0;
+        }
+        $lastsection = $section;
+        END {
+            if ($wanted_profile) {
+                print grep(/^$wanted_profile$/, @sections) . "\n";
+            } else {
+                print join("\n", @sections) . "\n";
+            }
+        }' $1 <$CNF
+}
+
 ######################################################################
 # hooks (may be overridden in clca.cfg)
 
@@ -1149,20 +1225,7 @@ hook_exit() {
 
 ######################################################################
 
-
-# CA profile to use
-PROFILE="CA_default"
-
-if [ "$1" = "--profile" ] ; then
-    PROFILE="$2"
-    echo "Using profile $PROFILE"
-    shift
-    shift
-fi
-
-if [ "$PROFILE" != "" ] ; then PROFILEARG="-name $PROFILE" ; fi
 if [ "$CNF" != "" ] ; then CONFIGARG="-config $CNF" ; fi
-
 
 CMD=`$BASENAME $0 | sed -e 's/^clca//'`
 INVOCATION="$0"
