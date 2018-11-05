@@ -37,7 +37,6 @@ WC=/usr/bin/wc
 TOUCH=/usr/bin/touch
 PERL=/usr/bin/perl
 BASENAME=/usr/bin/basename
-MD5SUM=/usr/bin/md5sum:/sbin/md5
 TAR=/bin/tar:/usr/bin/tar
 EOF
 )
@@ -147,7 +146,7 @@ Available commands:
   revoke		- Revoke certificate
   initialize		- Initialize CA 
   backup		- Create backup of CA state
-  check			- Display config file MD5 check sums
+  check			- Display config file check sums
 EOF
 	    ;;
 	list)
@@ -304,11 +303,7 @@ EOF
 	    $CAT <<EOF
 Usage: clca check
 
-Display MD5 check sums for config and executable files. 
-
-Use a distinct
-$MD5SUM $0 
-to verify integrity of this script!
+Display cryptographic check sums for config and executable files. 
 EOF
         ;;
 	backup)
@@ -531,7 +526,7 @@ certify()
 	TMPCNF=`$MKTEMP opensslcnf.XXXXXX`
 	topurge $TMPCNF
 
-	perl -n -e '
+	$PERL -n -e '
         BEGIN {
             $profile = shift;
             while (my $line = shift) {
@@ -1189,23 +1184,22 @@ check()
 	esac
     done
 
-    echo "MD5 check sums for config files:"
-    for i in $CFG $CNF ; do
-	$MD5SUM $i
+    echo "Check sums for config files:"
+    for i in $0 $CFG $CNF ; do
+	$OPENSSL dgst -sha256 $i
     done
 
     echo
     echo "Cumulative checksum over all system tools and executables:"
     # compute cumulative checksum on system tools
-    ( for i in $CMDLIST OPENSSL HSM_PRELOAD ; do
-          eval \$MD5SUM \$$i
-      done ) | $MD5SUM
-
-    echo
-    echo "Remember to run"
-    echo "$MD5SUM $0 $MD5SUM"
-    echo "to verify integrity of this script and md5sum itself."
-    echo
+    CHECKLIST="$CMDLIST OPENSSL"
+    if [ -n "$HSM_PRELOAD" ] ; then
+	CHECKLIST="$CHECKLIST HSM_PRELOAD"
+    fi
+    ( $OPENSSL dgst -sha256 $0 ;
+      for i in $CHECKLIST ; do
+          eval $OPENSSL dgst -sha256 \$$i
+      done ) | $CUT -d' ' -f2  | $OPENSSL dgst -sha256
 }
 
 
@@ -1261,7 +1255,7 @@ get_certificate_profiles() {
     # $1 - if empty: print list of profiles
     #      if specified: if profile exists, print profile, otherwise no output
 
-    perl -n -e '
+    $PERL -n -e '
         BEGIN {
             $wanted_profile = shift;
         }

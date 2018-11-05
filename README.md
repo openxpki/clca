@@ -205,12 +205,6 @@ This command will report individual check sums for the configuration
 files and one compound checksum over all external UNIX utilities
 used by the script.
 
-A trusted md5sum program is required for this to work. In addition,
-the ca script itself must be checked e. g. using the md5sum program
-to ensure that it is not tampered with.
-
-
-
 ## Creating CA backups
 
 At any time it is possible to create a snapshot of the current CA status,
