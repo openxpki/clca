@@ -191,13 +191,19 @@ EOF
 		;;
 	certify)
 	    $CAT <<EOF
-Usage: clca certify --profile <name> [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS] [--reqformat P10|SSCERT] [--subject <subject>] [--batch] <request file>
+Usage: clca certify --profile <name> [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS] [--reqformat P10|SSCERT] [--subject <subject>] [--san TYPE:SAN] [--batch] <request file>
 
 Signs a PKCS#10 certificate request (DER/PEM format is automatically
 detected). Certificate extensions and validity are determined by 
 settings in openssl.cnf.
 The certificate Subject DN from the request data will be used verbatim 
 in the certification process unless explicitly overridden via --subject.
+
+When signing certificate requests it is possible to add any number of
+Subject Alternative Names by specifying one or more --san options.
+The argument following --san is TYPE:SAN.
+TYPE must be one of the following: email, DNS, dirName, URI, IP, otherName.
+SAN is the respective value. See below for examples.
 
 The certificate profile to use for signing the certificate must be 
 specified via --profile <name>. The specified argument corresponds to
@@ -226,6 +232,12 @@ validity is used.
 
 If --batch is specified the underlying openssl commmand will be called
 in batch mode (useful for calling in shell scripts).
+
+Example:
+clca certify --profile endentity 
+  --subject "/DC=org/DC=openxpki/O=OpenXPKI/CN=example.openxpki.org" \\
+  --san DNS:foo.example.com --san DNS:bar.example.com --san IP:10.0.0.1 \\
+  --san "otherName:1.3.6.1.4.1.311.20.2.3;UTF8:test@kerberos-domain.internal" foo.csr
 
 EOF
 	    ;;
@@ -438,6 +450,7 @@ certify()
     fi
     
     PROFILE=""
+    SAN=()
     
     REQFORMAT="P10"
     while [ -n "$1" ] ; do
@@ -473,6 +486,12 @@ certify()
 		shift
 		shift
 		;;
+	    --san)
+		# push SAN to SAN list for later processing
+		SAN+=("$2")
+		shift
+		shift
+		;;
             --batch)
                 BATCH="-batch"
                 shift
@@ -487,7 +506,7 @@ certify()
 		;;
 	esac
     done
-
+    
     if [ -z "$PROFILE" ] ; then
 	echo "ERROR: --profile missing"
 	echo
@@ -504,6 +523,73 @@ certify()
 	get_certificate_profiles
 	echo
 	abort 1
+    fi
+    
+    if [ ${#SAN[@]} != 0 ] ; then
+	# SANs specified, need to create temporary config with SANs embedded
+
+	TMPCNF=`$MKTEMP opensslcnf.XXXXXX`
+	topurge $TMPCNF
+
+	perl -n -e '
+        BEGIN {
+            $profile = shift;
+            while (my $line = shift) {
+                push @RAWSANS, $line;
+            }
+        }
+        chomp;
+        next if (/^\s*#/);
+        $lastsection = $section;
+        if (/\[\s*(.*?)\s*\]/) {
+            $section = $1;
+        }
+        if (defined $x509_ext_section && ($x509_ext_section eq $section)) {
+            # remove original SAN section vom profile extension section
+            next if (/^\s*subjectAltName/);
+        }
+        if ($lastsection ne $section) {
+            # begin of new section found
+            if (defined $x509_ext_section && ($x509_ext_section eq $section)) {
+                # we are in the extensions section of the requested profile, add SAN section
+                push @OUT, $_;
+                push @OUT, "subjectAltName = \@command_line_sans";
+                $ok = 1;
+                next;
+            }
+        }
+        if ($section eq $profile) {
+            if (/^\s*x509_extensions\s*=\s*(.*?)\s*$/) {
+                # remember extension section name for this profile
+                $x509_ext_section = $1;
+            }
+        }
+        push @OUT, $_;
+        END {
+            foreach my $line (@OUT) {
+                print $line . "\n";
+            }
+            if ($ok) {
+                print "[ command_line_sans ]\n";
+                my %sancount;
+                foreach my $entry (@RAWSANS) {
+                    my ($type, $data) = ($entry =~ /^(.*?):(.*)/);
+                    if (! defined $type || ($type !~ m{^(?:DNS|IP|email|otherName|URI/)$})) {
+                        print STDERR "ERROR: invalid SAN type, use one of the following: DNS|IP|email|otherName|URI\n";
+                        exit 1;
+                    }                  
+                    my $count = $sancount{$type}++ || 0;
+                    print "$type.$count = $data\n";
+                }
+            }
+        }' $PROFILE ${SAN[@]} <$CNF >>$TMPCNF
+	if [ $? != 0 ] ; then
+	    echo "ERROR: could not process SANs"
+	    abort 1
+	fi
+
+	# pass temp config to further processing
+	CONFIGARG="-config $TMPCNF"
     fi
 
     if [ ! -r "$REQ" ] ; then
