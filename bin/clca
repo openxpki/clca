@@ -61,17 +61,66 @@ get_passphrase() {
 }
 
 # make sure get_passphrase is only called once
-# this function sets $PASSPHRASE and exports it
-# the function is called before each reference to $PASSPHRASE
+# this function exports PASSPHRASE as the unencrypted passphrase
+# NOTE: callers should unset the PASSPHRASE variable after use
 get_passphrase_cached() {
-    if [ -z ${PASSPHRASE+x} ] ; then
-	PASSPHRASE=`get_passphrase`
-	if [ $? == 0 ] ; then
-	    export PASSPHRASE
-	else
-	    unset PASSPHRASE
+    local CLEARTEXT_PASSPHRASE
+    
+    if [ -z ${ENCRYPTED_PASSPHRASE+x} ] ; then
+	
+	while : ; do
+	    CLEARTEXT_PASSPHRASE=`get_passphrase`
+	    if [ $? != 0 ] ; then
+		echo "ERROR: could not get passphrase"
+		abort 1
+	    fi
+	
+	    if verify_passphrase "$CLEARTEXT_PASSPHRASE" ; then
+		break
+	    fi
+	    echo
+	    echo "Incorrect passphrase, please repeat"
+	    echo
+	done
+
+	export CLCA_SESSION_KEY
+	ENCRYPTED_PASSPHRASE=`echo "$CLEARTEXT_PASSPHRASE" | $OPENSSL enc -aes256 -a -e -pass env:CLCA_SESSION_KEY`
+	if [ "$?" != 0 ] ; then
+	    echo "ERROR: could not encrypt passphrase"
+	    abort 1
 	fi
+	export -n CLCA_SESSION_KEY
+
+	PASSPHRASE="$CLEARTEXT_PASSPHRASE"
+	return 0
+    else
+	# passphrase has been set, decrypt and return
+	export CLCA_SESSION_KEY
+	PASSPHRASE=`echo "$ENCRYPTED_PASSPHRASE" | $OPENSSL enc -aes256 -a -d -pass env:CLCA_SESSION_KEY`
+	if [ "$?" != 0 ] ; then
+	    echo "ERROR: could not decrypt passphrase"
+	    abort 1
+	fi
+	export -n CLCA_SESSION_KEY
+	return 0
     fi
+}
+
+# try to unlock the private key with the pass phrase
+verify_passphrase() {
+    if [ "$ENGINE" = "openssl" ] ; then
+	# try to login to software private key
+	export TMPPASS="$1"
+	$OPENSSL pkey -in $CAPRIVDIR/$ROOTKEYNAME -passin env:TMPPASS >/dev/null 2>&1
+	if [ "$?" = "0" ] ; then
+	    unset TMPPASS
+	    return 0
+	fi
+	unset TMPPASS
+	return 1
+    fi
+    
+    # assume login is successful with non-openssl keystores (HSMs)
     return 0
 }
 
@@ -145,6 +194,7 @@ Available commands:
   genkey		- Generate (end entity) key
   revoke		- Revoke certificate
   initialize		- Initialize CA 
+  login	                - Login to CA key and enter subshell
   backup		- Create backup of CA state
   check			- Display config file check sums
 EOF
@@ -304,6 +354,19 @@ EOF
 Usage: clca check
 
 Display cryptographic check sums for config and executable files. 
+EOF
+        ;;
+	login)
+	    $CAT <<EOF
+Usage: clca login
+
+Ask for the passphrase of the CA key, verify if the passphrase is
+OK and execute a subshell.
+
+Within the subshell it is possible to repeatedly call clca without
+having to re-enter the CA passphrase for each single CA key operation.
+
+Type 'exit' to leave the subshell.
 EOF
         ;;
 	backup)
@@ -652,6 +715,7 @@ certify()
 		
 		echo "generating request" 
 		get_passphrase_cached
+		export PASSPHRASE
 		if [ ! -z ${PASSPHRASE+x} ] ; then
 		    OPENSSLOPT="-passin env:PASSPHRASE"
 		fi
@@ -660,7 +724,8 @@ certify()
 		if [ "$?" != 0 ] ; then
 		    echo "ERROR: CSR creation failed."
 		    abort 1		
-	    fi
+		fi
+		unset PASSPHRASE
 	    
 	    REQUESTINPUT="-in $INFILE"
 		;;
@@ -690,6 +755,7 @@ certify()
     if [ -n "$SUBJECT" ] ; then SUBJECT="-subj '$SUBJECT'" ; fi
     
     get_passphrase_cached
+    export PASSPHRASE
     if [ ! -z ${PASSPHRASE+x} ] ; then
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
@@ -701,6 +767,7 @@ certify()
 	echo "ERROR: Certification failed."
 	abort 1
     fi
+    unset PASSPHRASE
     
     if [ -r $CERTDIR/$SERIAL.pem ] ; then
 	echo "Wrote certificate to $CERTDIR/$SERIAL.pem"
@@ -755,16 +822,17 @@ revoke()
 		fi
 
 		get_passphrase_cached
+		export PASSPHRASE
 		if [ ! -z ${PASSPHRASE+x} ] ; then
 		    OPENSSLOPT="-passin env:PASSPHRASE"
 		fi
-
 
 		$HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -revoke $CERTDIR/$SERIAL.pem $CONFIGARG
 		if [ $? != 0 ] ; then
 		    echo "ERROR: Could not revoke certificate."
 		    abort 1
 		fi
+		unset PASSPHRASE
 
 		issue_crl
 	    else
@@ -877,6 +945,7 @@ issue_crl()
     fi
 
     get_passphrase_cached
+    export PASSPHRASE
     if [ ! -z ${PASSPHRASE+x} ] ; then
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
@@ -887,6 +956,7 @@ issue_crl()
 	$RM -f $CRLFILE
 	abort 1
     fi
+    unset PASSPHRASE
     
     ( cd $CRLDIR && $LN -sf `$BASENAME $CRLFILE` `$BASENAME $LATEST` )
     
@@ -1105,6 +1175,7 @@ EOF
     export CN="Root CA"
     
     get_passphrase_cached
+    export PASSPHRASE
     if [ ! -z ${PASSPHRASE+x} ] ; then
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
@@ -1115,7 +1186,7 @@ EOF
 	echo "ERROR: Something went wrong, could not create $OUT."
 	abort 1
     fi
-
+    unset PASSPHRASE
 
     # self-signed-certificate-with-absolute-validity workaround continued 
     if [ -n "$HAVE_VALIDITY" ] ; then
@@ -1304,6 +1375,17 @@ hook_exit() {
 
 
 ######################################################################
+# main
+
+# get a random password for this session
+if [ -z "$CLCA_SESSION_KEY" ] ; then
+    # only set it if not passed in from the environment
+    # if we are called from a "login" sub shell we get the
+    # session key of the parent for decryption of the 
+    # encrypted passphrase
+    CLCA_SESSION_KEY=`$OPENSSL rand -base64 40`
+fi
+
 
 if [ "$CNF" != "" ] ; then CONFIGARG="-config $CNF" ; fi
 
@@ -1327,6 +1409,17 @@ case "$CMD" in
         ;;
     issue_crl|certify|genkey|revoke|list|initialize|check|backup|modifycnf)
         :
+	;;
+    login)
+	shift
+	get_passphrase_cached
+	export ENCRYPTED_PASSPHRASE
+	export CLCA_SESSION_KEY
+	echo "Entering subshell, you can now run clca commands without having to enter the passphrase."
+	echo "Type 'exit' to return."
+	( export PS1="\h:\w \u [clca: logged in] \$ " ; $SHELL -i )
+	cleanup
+	exit 0
 	;;
     help)
 	if [ "$1" = "" ] ; then
