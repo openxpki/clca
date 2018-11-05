@@ -24,7 +24,7 @@ RANDFILE                = $dir/private/.rand    # private random number file
 unique_subject          = no
 email_in_dn             = no
 
-default_days	        = 1			# how long to certify for
+default_days	        = 365			# how long to certify for
 default_crl_days        = 365			# how long before next CRL
 preserve	        = no			# keep passed DN ordering
 
