@@ -109,6 +109,10 @@ get_passphrase_cached() {
 # try to unlock the private key with the pass phrase
 verify_passphrase() {
     if [ "$ENGINE" = "openssl" ] ; then
+	if [ ! -e "$CAPRIVDIR/$ROOTKEYNAME" ] ; then
+	    echo "WARNING: CA key $CAPRIVDIR/$ROOTKEYNAME does not exist. Continuing."
+	    return 0
+	fi
 	# try to login to software private key
 	export TMPPASS="$1"
 	$OPENSSL pkey -in $CAPRIVDIR/$ROOTKEYNAME -passin env:TMPPASS >/dev/null 2>&1
@@ -228,19 +232,46 @@ EOF
 	    ;;
 	genkey)
 	    $CAT <<EOF
-Usage: clca genkey [--bits <numbits>] [--enc des3|aes128|aes192|aes256] <name of keyfile>
+Usage: clca genkey [OPTIONS]
 
-Generates a rsa key and writes it to private/<name of keyfile>.pem
-Keysize is optional and will default to 2048 if not given. The key
-is encrypted using aes256 or the given encryption algorithm. The 
-locally supported algorithms might differ from those given above,
-check "openssl genrsa help" if necessary.
+Generates a (software) public/private key pair.
+
+OPTIONS:
+--keyfile KEYFILE
+KEYFILE defaults to the CA key specfied in the clca.cfg ($CAPRIVDIR/$ROOTKEYNAME).
+KEYFILE will not be overwritten if it already exists.
+
+--protect default|passphrase|none
+Defines the encryption passphrase source for the generated key. Default: 'default'
+'default':    generated key is protected by the same mechanism as defined for the CA key
+'passphrase': explicitly ask for a new passphrase for the key protection
+'none':       do not encrypt generated key
+
+--encalg aes256|aes192|aes128|des3
+Encrypt key using specified symmetric algorithm. Default: aes256
+This setting does not have any effect if "--protect none" is specified.
+
+--algorithm rsa|ec
+Public key algorithm to use. Default: 'rsa'
+'rsa': generate RSA public key pair
+'ec':  generate EC public key pair
+
+Additional options for algorithm 'rsa':
+--bits BITS
+Size of the RSA key to generate. Default: 2048.
+
+Additional options for algorithm 'ec':
+--curve CURVENAME
+Short name of the EC curve. Default: prime256v1
+Refer to 
+openssl ecparam -list_curves 
+for a full list of the possible parameters.
  
 EOF
 		;;
 	certify)
 	    $CAT <<EOF
-Usage: clca certify --profile <name> [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS] [--reqformat P10|SSCERT] [--subject <subject>] [--san TYPE:SAN] [--batch] <request file>
+Usage: clca certify --profile <name> [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS] [--reqformat P10|SSCERT|KEY] [--subject <subject>] [--san TYPE:SAN] [--batch] <request file>
 
 Signs a PKCS#10 certificate request (DER/PEM format is automatically
 detected). Certificate extensions and validity are determined by 
@@ -267,6 +298,14 @@ nor a distinguished_name.)
 If --reqformat SSCERT is specified then the input file should be
 a self-signed certificate that will be used instead of a PKCS#10 request
 (which is the default).
+
+If --reqformat KEY is specified the specified request file must be a PEM
+formatted private key.
+If the key is encrypted, the passphrase must be set as environment
+variable PASSPHRASE when calling the certify command.
+A temporary request file is generated from the specified key file 
+and a certificate is issued for the temporary request.
+The request/certificate --subject option is mandatory in this mode.
 
 After certification is performed the new certificate is copied to
 the directory $CERTDIR. 
@@ -520,44 +559,103 @@ sanitize_openssl_date() {
 ######################################################################
 ######################################################################
 
-
 genkey()
 {
-
-    if [ "$1" = "" ] ; then
-		showhelp genkey
-		abort 1
-    fi
-
-    BITS=2048	
+    ENCALG=aes256
+    KEYFILE="$CAPRIVDIR/$ROOTKEYNAME"
+    ALGORITHM=rsa
+    BITS=2048
+    CURVE=prime256v1
+    PROTECT=default
     
     while [ -n "$1" ] ; do
 	case "$1" in
+	    --keyfile)
+		KEYFILE=$2
+		shift
+		shift
+		;;
+	    --encalg)
+		if ! echo $2 | $EGREP '^(aes256|aes192|aes128|des3)$' >/dev/null ; then
+		    echo "ERROR: invalid encryption algorithm $2"
+		    abort 1
+		fi
+		ENCALG="$2"
+		shift
+		shift
+		;;
+	    --algorithm)
+		ALGORITHM=$2
+		shift
+		shift
+		;;
 	    --bits)
 		BITS="$2"
 		shift
 		shift
 		;;
-	    *)
-		KEYFILE=private/$1.pem
+	    --curve)
+		CURVE="$2"
 		shift
+		shift
+		;;
+	    --protect)
+		PROTECT="$2"
+		shift
+		shift
+		;;
+	    *)
+		showhelp genkey
+		abort 1
 		;;
 	esac
     done
-	
-	if [ -z "$KEYFILE" ]; then
-		echo "ERROR: You need to pass a name for the key file";
-		abort 1
-	fi  
-	
-	if [ -e "$KEYFILE" ]; then
-		echo "ERROR: $KEYFILE already exists - aborting";
-		abort 1
-	fi  
 
-	$OPENSSL genrsa -aes256 -out "$KEYFILE" $BITS
-	$CHMOD 400 $KEYFILE
-	echo "key written to $KEYFILE"
+    if [ -e "$KEYFILE" ] ; then
+	echo "ERROR: key file $KEYFILE already exists. Refusing to overwrite."
+	abort 1
+    fi
+
+
+    case "$PROTECT" in
+	default)
+	    get_passphrase_cached
+	    export PASSPHRASE
+	    if [ ! -z ${PASSPHRASE+x} ] ; then
+		OPENSSLOPT="$OPENSSLOPT -passout env:PASSPHRASE -$ENCALG"
+	    fi
+	    ;;
+	passphrase)
+	    OPENSSLOPT="$OPENSSLOPT -$ENCALG"
+	    ;;
+	none)
+	    ;;
+	*)
+	    echo "ERROR: invalid --protect mode"
+	    abort1
+	    ;;
+    esac
+    case "$ALGORITHM" in
+	rsa)
+	    $OPENSSL genrsa $OPENSSLOPT -out "$KEYFILE" $BITS
+	    ;;
+	ec)
+	    $OPENSSL ecparam -genkey -name $CURVE | $OPENSSL ec $OPENSSLOPT -out "$KEYFILE"
+	    ;;
+	*)
+	    echo "ERROR: invalid encryption algorithm $2"
+	    abort 1
+	    ;;
+    esac
+    
+    if [ $? != 0 ] ; then
+	echo "ERROR: key generation failed"
+	unset PASSPHRASE
+	abort 1
+    fi
+    unset PASSPHRASE
+    $CHMOD 400 $KEYFILE
+    echo "Key written to $KEYFILE"
 }
 
 
@@ -752,40 +850,36 @@ certify()
 	    REQUESTINPUT="-ss_cert $INFILE"
 	    ;;
 	KEY)
-		echo "create request and certificate for a given key"
+	    if [ -z "$SUBJECT" ] ; then
+		echo "ERROR: --subject is required for KEY request format"
+		abort 1
+	    fi
+	    
+	    if [ ! -e $REQ ]; then
+		echo "ERROR: pass pem encoded key as last argument."
+		abort 1
+	    fi
 		
-		if [ ! -e $REQ ]; then
-			echo "ERROR: pass pem encoded key as last argument."
-			abort 1;
-		fi
-		
-		export CN
-		if [ -z "$SUBJECT" ]; then
-			echo -n "enter subject name: "
-			read CN		
-		else
-			CN=$SUBJECT
-			SUBJECT=
-		fi
-		INFILE=`$MKTEMP /tmp/temp.XXXXXX`
-		topurge $INFILE
-		
-		echo "generating request" 
+	    INFILE=`$MKTEMP /tmp/temp.XXXXXX`
+	    topurge $INFILE
+	    
+	    if [ -z "$PASSPHRASE" ] ; then
 		get_passphrase_cached
 		export PASSPHRASE
-		if [ ! -z ${PASSPHRASE+x} ] ; then
-		    OPENSSLOPT="-passin env:PASSPHRASE"
-		fi
-		
-		$OPENSSL req -new $OPENSSLOPT -out $INFILE -outform pem -key "$REQ" $CONFIGARG
-		if [ "$?" != 0 ] ; then
-		    echo "ERROR: CSR creation failed."
-		    abort 1		
-		fi
-		unset PASSPHRASE
+	    fi
+	    if [ ! -z ${PASSPHRASE+x} ] ; then
+		OPENSSLOPT="-passin env:PASSPHRASE"
+	    fi
+	    
+	    $OPENSSL req -new $OPENSSLOPT -out $INFILE -outform pem -key "$REQ" $CONFIGARG
+	    if [ "$?" != 0 ] ; then
+		echo "ERROR: CSR creation failed."
+		abort 1		
+	    fi
+	    unset PASSPHRASE
 	    
 	    REQUESTINPUT="-in $INFILE"
-		;;
+	    ;;
 	*)
 	    echo "ERROR: Unsupported request format '$REQFORMAT' specified"
 	    abort 1
