@@ -276,6 +276,9 @@ is written to the file 'newcert.pem' in the current directory.
 If --startdate or --enddate are specified, these dates are used for
 the certificate's lifetime. The dates must be specified in the format
 YYMMDDHHMMSS and are interpreted as UTC times.
+The date specification can be abbreviated by omitting parts of the
+date/time specification (e. g. "YYMM" only). Omitted date/time components
+are initialized to the lowest possible value.
 If --startdate/--enddate are not specified the default certificate 
 validity is used.
 
@@ -323,6 +326,9 @@ written to the specified filename.
 
 If --startdate and --enddate is specified, these dates denominate
 the CA certificate absolute life time for a self-signed CA certificate.
+The date specification can be abbreviated by omitting parts of the
+date/time specification (e. g. "YYMM" only). Omitted date/time components
+are initialized to the lowest possible value.
 
 It is safe to call this function after creating the database,
 as it will detect that a CA has already been created and terminate
@@ -455,6 +461,61 @@ EOF
     fi
 }
 
+# arg: user specified date, format YYMMDDHHMMSSZ
+# It is possible to specify only portions of the date, 
+# starting from the left-hand side and leave out the 
+# lower tier date components, e. g. "YY" or "YYMMDD".
+# The function will add any missing date elements and
+# return a valid OpenSSL date with the full fomat YYMMDDHHMMSSZ
+# (including the Z at the end of the string).
+sanitize_openssl_date() {
+    $PERL -e '
+    my $date = shift;
+    my ($yy, $mm, $dd, $hh, $min, $ss, $z) = ($date =~ m{^(\d\d)(\d\d)?(\d\d)?(\d\d)?(\d\d)?(\d\d)?(Z)?$});
+
+    if (! defined $yy) {
+        print STDERR "ERROR: specified date is not of the form YYMMDDHHMMSSZ (or a subset)\n";
+        exit 1;
+    }
+
+    if ($yy < 10 || $yy > 50) {
+        print STDERR "WARNING: Year 20$yy in date specification. Please double-check.\n";
+    }
+    if ($yy == 20) {
+        print STDERR "WARNING: Year 2020 specified. Please double-check.\n";
+    }
+    $mm = "01" unless defined $mm;
+    $dd = "01" unless defined $dd;
+    $hh = "00" unless defined $hh;
+    $min = "00" unless defined $min;
+    $ss = "00" unless defined $ss;
+    $z = "Z" unless defined $z;
+
+    if ($mm > 12) {
+        print STDERR "ERROR: Invalid month $mm specified.\n";
+        exit 1;
+    }
+    if ($dd > 31) {
+        print STDERR "ERROR: Invalid day $dd specified.\n";
+        exit 1;
+    }
+    if ($hh > 23) {
+        print STDERR "ERROR: Invalid hour $hh specified.\n";
+        exit 1;
+    }
+    if ($min > 59) {
+        print STDERR "ERROR: Invalid minute $min specified.\n";
+        exit 1;
+    }
+    if ($ss > 59) {
+        print STDERR "ERROR: Invalid second $ss specified.\n";
+        exit 1;
+    }
+
+    print $yy . $mm . $dd . $hh . $min . $ss . $z . "\n";
+    ' "$1"
+}
+
 
 ######################################################################
 ######################################################################
@@ -519,16 +580,12 @@ certify()
 		shift
 		;;
 	    --startdate|--notbefore)
-		# append "Z" for UTC time
-		STARTDATE="$2"
-		STARTDATE="${STARTDATE%%Z*}Z"
+		STARTDATE=`sanitize_openssl_date $2`
 		shift
 		shift
 		;;
 	    --enddate|--notafter)
-		# append "Z" for UTC time
-		ENDDATE="$2"
-		ENDDATE="${ENDDATE%%Z*}Z"
+		ENDDATE=`sanitize_openssl_date $2`
 		shift
 		shift
 		;;
@@ -974,15 +1031,13 @@ initialize()
 {
     while [ -n "$1" ] ; do
 	case "$1" in
-	    --startdate)
-		STARTDATE="$2"
-		STARTDATE="${STARTDATE%%Z*}Z"
+	    --startdate|--notbefore)
+		STARTDATE=`sanitize_openssl_date $2`
 		shift
 		shift
 		;;
-	    --enddate)
-		ENDDATE="$2"
-		ENDDATE="${ENDDATE%%Z*}Z"
+	    --enddate|--notafter)
+		ENDDATE=`sanitize_openssl_date $2`
 		shift
 		shift
 		;;

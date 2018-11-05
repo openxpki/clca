@@ -121,6 +121,8 @@ to the directory `attic/` and a new CA is created.
 Startdate and enddate are specified in UTC time zone. Note that the
 year must be specified with two digits only!
 
+Date/time may be specified in truncated form, omitting any number of "right-hand side" date/time components (e. g. "YYMM").
+
 Unless you are using a HSM you will be prompted to enter 
 the PINs protecting the CA private key during the creation of the CA.
 
@@ -149,6 +151,9 @@ Refer to the command help text for details.
 
 The startdate and enddate options are optional and are specified in UTC time zone. 
 Note that the year must be specified with two digits only!
+
+Date/time may be specified in truncated form, omitting any number of "right-hand side" date/time components (e. g. "YYMM").
+
 If no startdate/enddate is specified the default validity from the profile is used.
 
 Omitting startdate and enddate is only recommended for end entity certificates, 
@@ -180,7 +185,6 @@ lists all certificates matching the specified filter. Filter may
 be empty or either 'valid' or 'revoked'.
 If no filter is specified, all certificates are printed to standard out,
 
-
 ## Issuing CRLs
 
 For creating a new CRL run
@@ -193,6 +197,17 @@ the current time stamp.)
 
 The CRL validity is configured in the etc/openssl.cnf file.
 
+## CA Key Login
+
+If multiple clca commands should be executed in a row (e. g. for signing multiple certificates) it is possible to enter a subshell in which the CA key passphrase is cached.
+
+Running
+
+`$ clca login`
+
+will first ask for the CA key passphrase and then drop into the subshell. It is possible to execute any number of clca commands which require the CA passphrase without having to enter the passphrase again.
+
+Type `exit` to leave this shell.
 
 ## Checking software integrity
 
