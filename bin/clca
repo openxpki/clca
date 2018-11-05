@@ -71,9 +71,9 @@ get_passphrase_cached() {
 	while : ; do
 	    CLEARTEXT_PASSPHRASE="$(get_passphrase)"
 	    RC=$?
-	    if [ $RC = 9 ] ; then
-		# return code 2: silent and successful exit; use this e. g. to initialize secret sharing
-		abort 0
+	    if [ $RC -ge 10 ] ; then
+		# return code 10 or higher: terminate silently with return code (RC - 10)
+		abort $(( $RC - 10 ))
 	    fi
 	    if [ $RC != 0 ] ; then
 		echo "ERROR: could not get passphrase"
@@ -267,7 +267,7 @@ Public key algorithm to use. Default: 'rsa'
 'ec':  generate EC public key pair
 
 Additional options for algorithm 'rsa':
---bits BITS
+--keysize BITS
 Size of the RSA key to generate. Default: 2048.
 
 Additional options for algorithm 'ec':
@@ -448,6 +448,7 @@ abort()
 
 traphandler()
 {
+    reset
     abort 1
 }
 
@@ -571,11 +572,11 @@ sanitize_openssl_date() {
 
 genkey()
 {
-    ENCALG=aes256
+    ENCALG=${DEFAULT_ENC_ALGORITHM:-aes256}
     KEYFILE="$CAPRIVDIR/$ROOTKEYNAME"
-    ALGORITHM=rsa
-    BITS=2048
-    CURVE=prime256v1
+    ALGORITHM=${DEFAULT_PUBKEY_ALGORITHM:-rsa}
+    KEYSIZE=${DEFAULT_RSA_KEYSIZE:-2048}
+    CURVE=${DEFAULT_EC_CURVE:-prime256v1}
     PROTECT=default
     
     while [ -n "$1" ] ; do
@@ -599,8 +600,8 @@ genkey()
 		shift
 		shift
 		;;
-	    --bits)
-		BITS="$2"
+	    --keysize)
+		KEYSIZE="$2"
 		shift
 		shift
 		;;
@@ -647,7 +648,7 @@ genkey()
     esac
     case "$ALGORITHM" in
 	rsa)
-	    $OPENSSL genrsa $OPENSSLOPT -out "$KEYFILE" $BITS
+	    $OPENSSL genrsa $OPENSSLOPT -out "$KEYFILE" $KEYSIZE
 	    ;;
 	ec)
 	    $OPENSSL ecparam -genkey -name $CURVE | $OPENSSL ec $OPENSSLOPT -out "$KEYFILE"
