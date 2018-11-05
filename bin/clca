@@ -174,7 +174,7 @@ fi
 
 ######################################################################
 
-VERSION="1.4"
+VERSION="1.5"
 
 showhelp()
 {
@@ -491,11 +491,11 @@ sanitize_openssl_date() {
     $ss = "00" unless defined $ss;
     $z = "Z" unless defined $z;
 
-    if ($mm > 12) {
+    if ($mm < 1 || $mm > 12) {
         print STDERR "ERROR: Invalid month $mm specified.\n";
         exit 1;
     }
-    if ($dd > 31) {
+    if ($dd < 1 || $dd > 31) {
         print STDERR "ERROR: Invalid day $dd specified.\n";
         exit 1;
     }
