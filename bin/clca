@@ -253,9 +253,13 @@ KEYFILE will not be overwritten if it already exists.
 
 --protect default|passphrase|none
 Defines the encryption passphrase source for the generated key. Default: 'default'
-'default':    generated key is protected by the same mechanism as defined for the CA key
+'default':    generated key is protected by the same mechanism as defined for the CA key (see below)
 'passphrase': explicitly ask for a new passphrase for the key protection
 'none':       do not encrypt generated key
+
+NOTE: if the environment variable PASSPHRASE is set for '--protect default' the value
+of this variable will be used to protect the generated private key. Otherwise
+the default meachanism will be used to obtain the CA private key.
 
 --encalg aes256|aes192|aes128|des3
 Encrypt key using specified symmetric algorithm. Default: aes256
@@ -630,8 +634,10 @@ genkey()
 
     case "$PROTECT" in
 	default)
-	    get_passphrase_cached
-	    export PASSPHRASE
+	    if [ -z "$PASSPHRASE" ] ; then
+		get_passphrase_cached
+		export PASSPHRASE
+	    fi
 	    if [ ! -z ${PASSPHRASE+x} ] ; then
 		OPENSSLOPT="$OPENSSLOPT -passout env:PASSPHRASE -$ENCALG"
 	    fi
