@@ -1,13 +1,15 @@
+# Interactive Secret Sharing CA runbook example
 This is an example runbook for an interactive key ceremony using Secret Sharing.
 
 2013-12-16 Martin Bartosch
-
 
 Assumptions:
 2048 Bit RSA key protected by a 128 Bit random pass phrase.
 The pass phrase is split into 5 shares, of which 3 will be needed to perform CA operations.
 
 
+
+```
 1. Preparation of CLCA configuration
 
 export K=3
@@ -26,7 +28,6 @@ get_passphrase() {
 }
 EOF
 
-
 2. Generate CA key and perform secret sharing.
 
 Required: you need N=5 persons for safekeeping of the CA shares.
@@ -35,7 +36,6 @@ eval `./bin/secret generate  --n $N --k $K` openssl genrsa -aes256 -passout env:
 
 Each share holder must copy the displayed share literally and keep it.
 
-
 3. Create the CA certificate
 
 cd dummyca
@@ -43,9 +43,12 @@ cd dummyca
 
 4. Create initial CRL
 
-../bin/clca issue_crl
+../bin/clca issuecrl
 
 5. Sign certificate
 
-../bin/clca certify REQUEST
+../bin/clca certify --profile foo REQUEST
+
+
+```
 

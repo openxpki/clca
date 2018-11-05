@@ -1,3 +1,5 @@
+# Noninteractive runbook example
+
 This is an example runbook for a noninteractive key ceremony using plain/static keys.
 
 2013-12-16 Martin Bartosch
@@ -7,7 +9,7 @@ This is an example runbook for a noninteractive key ceremony using plain/static 
 Assumptions:
 2048 Bit RSA key protected by the passphrase '1234'.
 
-
+```
 1. Preparation of CLCA configuration
 
 rm -rf dummyca/
@@ -23,11 +25,9 @@ get_passphrase() {
 }
 EOF
 
-
 2. Generate CA key and perform secret sharing.
 
 PASSPHRASE="1234" openssl genrsa -aes256 -passout env:PASSPHRASE -out dummyca/private/rsa-rootkey 2048
-
 
 3. Create the CA certificate
 
@@ -36,9 +36,12 @@ cd dummyca
 
 4. Create initial CRL
 
-../bin/clca issue_crl
+../bin/clca issuecrl
 
-5. Sign certificate
+4. Sign certificate
 
-../bin/clca certify REQUEST
+../bin/clca certify --profile foo REQUEST
+
+
+```
 
