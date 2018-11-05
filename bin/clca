@@ -69,9 +69,18 @@ get_passphrase_cached() {
     if [ -z ${ENCRYPTED_PASSPHRASE+x} ] ; then
 	
 	while : ; do
-	    CLEARTEXT_PASSPHRASE=`get_passphrase`
-	    if [ $? != 0 ] ; then
+	    CLEARTEXT_PASSPHRASE="$(get_passphrase)"
+	    RC=$?
+	    if [ $RC = 9 ] ; then
+		# return code 2: silent and successful exit; use this e. g. to initialize secret sharing
+		abort 0
+	    fi
+	    if [ $RC != 0 ] ; then
 		echo "ERROR: could not get passphrase"
+		abort 1
+	    fi
+	    if [ -z "CLEARTEXT_PASSPHRASE" ] ; then
+		echo "FATAL: Null passphrase"
 		abort 1
 	    fi
 	
@@ -79,8 +88,9 @@ get_passphrase_cached() {
 		break
 	    fi
 	    echo
-	    echo "Incorrect passphrase, please repeat"
+	    echo "Passphrase does not unlock private key, please repeat"
 	    echo
+	    sleep 1
 	done
 
 	export CLCA_SESSION_KEY
@@ -678,12 +688,18 @@ certify()
 		shift
 		;;
 	    --startdate|--notbefore)
-		STARTDATE=`sanitize_openssl_date $2`
+		STARTDATE=$(sanitize_openssl_date $2)
+		if [ -z "$STARTDATE" ] ; then
+		    abort 1
+		fi
 		shift
 		shift
 		;;
 	    --enddate|--notafter)
-		ENDDATE=`sanitize_openssl_date $2`
+		ENDDATE=$(sanitize_openssl_date $2)
+		if [ -z "$ENDDATE" ] ; then
+		    abort 1
+		fi
 		shift
 		shift
 		;;
@@ -1126,12 +1142,18 @@ initialize()
     while [ -n "$1" ] ; do
 	case "$1" in
 	    --startdate|--notbefore)
-		STARTDATE=`sanitize_openssl_date $2`
+		STARTDATE=$(sanitize_openssl_date $2)
+		if [ -z "$STARTDATE" ] ; then
+		    abort 1
+		fi
 		shift
 		shift
 		;;
 	    --enddate|--notafter)
-		ENDDATE=`sanitize_openssl_date $2`
+		ENDDATE=$(sanitize_openssl_date $2)
+		if [ -z "$ENDDATE" ] ; then
+		    abort 1
+		fi
 		shift
 		shift
 		;;
