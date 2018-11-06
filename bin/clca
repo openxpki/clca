@@ -637,6 +637,11 @@ genkey()
 	    if [ -z "$PASSPHRASE" ] ; then
 		get_passphrase_cached
 		export PASSPHRASE
+	    else
+		echo "****************************************************************"
+		echo "INFO: using externally supplied PASSPHRASE instead of CA default"
+		echo "****************************************************************"
+		echo
 	    fi
 	    if [ ! -z ${PASSPHRASE+x} ] ; then
 		OPENSSLOPT="$OPENSSLOPT -passout env:PASSPHRASE -$ENCALG"
@@ -683,14 +688,17 @@ certify()
 	abort 1
     fi
     
-    PROFILE=""
     SAN=()
+
+    PROFILE_ARG_SPECIFIED=0
     
     REQFORMAT="P10"
     while [ -n "$1" ] ; do
 	case "$1" in
 	    --profile)
 		PROFILE="$2"
+		# PROFILE may be passed in internally, only perform sanity checks if specified on command line
+		PROFILE_ARG_SPECIFIED=1
 		shift
 		shift
 		;;
@@ -752,7 +760,7 @@ certify()
 	abort 1
     fi
 
-    if [ "`get_certificate_profiles $PROFILE`" != "1" ] ; then
+    if [ "$PROFILE_ARG_SPECIFIED" = "1" -a "`get_certificate_profiles $PROFILE`" != "1" ] ; then
 	echo "ERROR: invalid --profile specified."
 	echo
 	echo "Available profiles:"
@@ -1387,7 +1395,10 @@ EOF
 	SERIAL="${SERIAL#*=}"
  	echo "$SERIAL" >$CADBDIR/serial
 	
+	# force Root extensions
+	PROFILE="CA_default"
  	certify $VALIDITY --reqformat SSCERT $OUT
+	unset PROFILE
 
  	CACERT="$SAVED_CACERT"
  	$RM -f newcert.pem
