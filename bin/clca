@@ -212,6 +212,12 @@ Available commands:
   backup		- Create backup of CA state
   check			- Display config file check sums
 EOF
+
+	    # list all custom functions
+	    for F in `declare -F -p | cut -d " " -f 3 | grep custom_ | cut -d_ -f2-`; do
+		DESC=`custom_$F --shorthelp | head -1` || '<no description available>'
+		printf "  %-21s - %s\n" $F "$DESC"
+	    done
 	    ;;
 	list)
 	    $CAT <<EOF
@@ -1619,9 +1625,16 @@ case "$CMD" in
 	abort 1
 	;;
     *)
-	echo "Unknown invocation mode '$CMD'"
-	showhelp commands
-	abort 1
+	CUSTOM_FUNCTION="custom_$CMD"
+	TYPE=`type -t $CUSTOM_FUNCTION`
+	if [ "$TYPE" != "function" ] ; then
+	    echo "Unknown invocation mode '$CMD'"
+	    showhelp commands
+	    abort 1
+	else
+	    # delegate command execution to custom function
+	    CMD=$CUSTOM_FUNCTION
+	fi
 	;;
 esac
 
