@@ -1,0 +1,181 @@
+#!/usr/bin/env perl
+#
+
+use strict;
+use warnings;
+
+use YAML;
+use Template;
+use Getopt::Long;
+use File::Spec;
+use File::Path qw(make_path);
+
+use Data::Dumper;
+
+my $template_dir = "etc/templates";
+
+my $opt_help;
+my $opt_debug;
+my $opt_force;
+my $opt_template;
+my $opt_cmdargs;
+
+GetOptions (
+    "template=s" => \$opt_template,
+    "set=s@"     => \$opt_cmdargs,
+    "help"       => \$opt_help,
+    "force"      => \$opt_force,
+    "debug"      => \$opt_debug)
+    or die("Error in command line arguments\n");
+
+if (! -d $template_dir) {
+    print STDERR "ERROR: Template directory $template_dir does not exist.\n";
+    exit 1;
+}
+if (! -r $template_dir) {
+    print STDERR "ERROR: Template directory $template_dir is not readable\n";
+    exit 1;
+}
+
+if (! defined $opt_template) {
+    print STDERR "No --template specified. Available templates:\n";
+    opendir(my $dh, $template_dir) || die "Can't open $template_dir: $!";
+    while (readdir $dh) {
+	if ($_ =~ /(.*)\.yaml$/) {
+	    print "$1\n";
+	}
+    }
+    closedir $dh;
+    exit 0;
+}
+
+my $configfile = File::Spec->catfile($template_dir, $opt_template . ".yaml");
+if (! -r $configfile) {
+    print STDERR "ERROR: template $configfile not readable\n";
+    exit 1;
+}
+if (! -f $configfile) {
+    print STDERR "ERROR: template $configfile not a regular file\n";
+    exit 1;
+}
+
+# assertions
+my $targetdir = shift;
+if (! defined $targetdir) {
+    print STDERR "No output directory specified\n";
+    exit 1;
+}
+if (-e $targetdir && ! $opt_force) {
+    print STDERR "Specified target $targetdir already exists\n";
+    exit 1;
+}
+if (! mkdir $targetdir) {
+    if (! $opt_force) {
+	print STDERR "Could not create target directory $targetdir\n";
+	exit 1;
+    }
+}
+
+my $cmdvars = {};
+if (defined $opt_cmdargs) {
+    foreach my $arg (@{$opt_cmdargs}) {
+	my ($key, $value) = ($arg =~ m{(.*?)\s*[:=]\s*(.*)});
+	if (! defined $key) {
+	    print STDERR "Invalid --set syntax, use '--set foo:bar' to set variable foo to bar\n";
+	    exit 1;
+	}
+	$cmdvars->{$key} = $value;
+    }
+}
+
+# processed configuration
+my $config;
+my $template;
+
+# slurp raw yaml config from file
+my $configfile_contents = do {
+    open my $fh, '<', $configfile;
+    local $/;
+    <$fh>;
+};
+my $configfile_contents_last = '';
+my $templateconfig;
+# configuration may contain nested Template directives...
+while (1) {
+    $config = YAML::Load($configfile_contents);
+    $config->{cmdvars} = $cmdvars;
+
+    # check if passed command line args are valid
+    if (exists $config->{args}) {
+	foreach my $var (keys %{$config->{args}}) {
+	    # if a default value is specified, use it
+	    if (defined $config->{args}->{$var}->{default}) {
+		$config->{cmdvars}->{$var} ||= $config->{args}->{$var}->{default};
+	    }
+	    my $value = $config->{cmdvars}->{$var};
+
+	    if (! defined $value) {
+		print STDERR "ERROR: required argument --set '$var:VALUE' not specified\n";
+		print "Hint: $config->{args}->{$var}->{hint}\n\n" if defined $config->{args}->{$var}->{hint};
+		exit 1;
+		next;
+	    }
+	    if (defined $config->{args}->{$var}->{match}) {
+		my $pattern = $config->{args}->{$var}->{match};
+		my $pattern_re = qr($pattern);
+		if ($value !~ $pattern_re) {
+		    print STDERR "ERROR: argument --set '$var:VALUE': VALUE ($value) does not match required pattern ($pattern)\n";
+		    exit 1 unless ($opt_force);
+		}
+	    }
+	}
+    }
+    # check if no command line arguments are passed which are unknown
+    foreach my $arg (keys %{$config->{cmdvars}}) {
+	if (! defined $config->{args}->{$arg}) {
+	    print STDERR "ERROR: unexpected argument --set $arg\n";
+	    exit 1;
+	}
+    }
+
+    $templateconfig = $config->{templateconfig};
+    $templateconfig = {} unless (ref $templateconfig eq 'HASH');
+    if (! exists $templateconfig->{INTERPOLATE}) {
+	$templateconfig->{INTERPOLATE} = 1;
+    }
+    $template = Template->new($templateconfig);
+
+    # exit if configuration was not changed by templating
+    print STDERR Dumper $config if ($opt_debug);
+    last if ($configfile_contents eq $configfile_contents_last);
+    $configfile_contents_last = $configfile_contents;
+
+    # reprocess config file with template
+    my $out = '';
+    if (! $template->process(\$configfile_contents, $config, \$out)) {
+	print STDERR "ERROR: could not process template\n" . $template->error() . "\n";
+	exit 1;
+    }
+    $configfile_contents = $out;
+}
+
+# re-init template; do not interpolate
+delete $templateconfig->{INTERPOLATE};
+$template = Template->new($templateconfig);
+
+foreach my $entry (keys %{$config->{files}}) {
+    my $infile  = File::Spec->catfile($template_dir, $entry);
+    my $outfile = File::Spec->catfile($targetdir, $config->{files}->{$entry});
+    my ($volume, $directory, $file) =
+	File::Spec->splitpath($outfile);
+    if (! defined $infile || ! -r $infile) {
+	die "Could not find input file $infile. Stopped";
+    }
+    make_path($directory);
+    if (! $template->process($infile, $config, $outfile)) {
+	print STDERR "ERROR: could not process template file $infile -> $outfile.\n" .  $template->error() . "\n";
+	exit 1
+    }
+    print "Generated $outfile\n";
+}
+
