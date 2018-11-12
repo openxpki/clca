@@ -12,8 +12,9 @@ use File::Path qw(make_path);
 
 use Data::Dumper;
 
-my $template_dir = "etc/templates";
 
+my $template_dir = "etc/templates";
+my $template_config_args;
 my $opt_help;
 my $opt_debug;
 my $opt_force;
@@ -21,11 +22,13 @@ my $opt_template;
 my $opt_cmdargs;
 
 GetOptions (
-    "template=s" => \$opt_template,
-    "set=s@"     => \$opt_cmdargs,
-    "help"       => \$opt_help,
-    "force"      => \$opt_force,
-    "debug"      => \$opt_debug)
+    "template=s"     => \$opt_template,
+    "templatedir=s"  => \$template_dir,
+    "templateconfig=s@" => \$template_config_args,
+    "set=s@"         => \$opt_cmdargs,
+    "help"           => \$opt_help,
+    "force"          => \$opt_force,
+    "debug"          => \$opt_debug)
     or die("Error in command line arguments\n");
 
 if (! -d $template_dir) {
@@ -88,9 +91,22 @@ if (defined $opt_cmdargs) {
     }
 }
 
+my $templateconfig_from_cmdargs;
+if (defined $template_config_args) {
+    foreach my $arg (@{$template_config_args}) {
+	my ($key, $value) = ($arg =~ m{(.*?)\s*[:=]\s*(.*)});
+	if (! defined $key) {
+	    print STDERR "Invalid --templateconfig syntax, use '--templateconfig foo:bar' to set variable foo to bar\n";
+	    exit 1;
+	}
+	$templateconfig_from_cmdargs->{$key} = $value;
+    }
+}
+
 # processed configuration
 my $config;
 my $template;
+my $templateconfig;
 
 # slurp raw yaml config from file
 my $configfile_contents = do {
@@ -99,7 +115,6 @@ my $configfile_contents = do {
     <$fh>;
 };
 my $configfile_contents_last = '';
-my $templateconfig;
 # configuration may contain nested Template directives...
 while (1) {
     $config = YAML::Load($configfile_contents);
@@ -137,16 +152,23 @@ while (1) {
 	    exit 1;
 	}
     }
-
+    
     $templateconfig = $config->{templateconfig};
     $templateconfig = {} unless (ref $templateconfig eq 'HASH');
     if (! exists $templateconfig->{INTERPOLATE}) {
 	$templateconfig->{INTERPOLATE} = 1;
     }
+
+    # override template config from command line
+    foreach my $key (keys %{$templateconfig_from_cmdargs}) {
+	$templateconfig->{$key} = $templateconfig_from_cmdargs->{$key};
+    }
+
+    print STDERR "Template config:\n" . Dumper $templateconfig if ($opt_debug);
     $template = Template->new($templateconfig);
 
     # exit if configuration was not changed by templating
-    print STDERR Dumper $config if ($opt_debug);
+    print STDERR "Config:\n" . Dumper $config if ($opt_debug);
     last if ($configfile_contents eq $configfile_contents_last);
     $configfile_contents_last = $configfile_contents;
 
