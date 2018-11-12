@@ -1371,8 +1371,12 @@ EOF
     if [ ! -z ${PASSPHRASE+x} ] ; then
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
+
+    if [ -n "${CA_VALIDITY}" ] ; then
+	OPENSSLOPT="$OPENSSLOPT -days $CA_VALIDITY"
+    fi
     
-    $HSM_PRELOAD $OPENSSL req $OPENSSLOPT -new $X509ARG -days $CA_VALIDITY $KEYARG -out $OUT $CONFIGARG
+    $HSM_PRELOAD $OPENSSL req $OPENSSLOPT -new $X509ARG $KEYARG -out $OUT $CONFIGARG
 
     if [ $? != 0 ] ; then
 	echo "ERROR: Something went wrong, could not create $OUT."
