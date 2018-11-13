@@ -14,6 +14,7 @@ use Data::Dumper;
 
 
 my $template_dir = "etc/templates";
+my $include_dir;
 my $template_config_args;
 my $opt_help;
 my $opt_debug;
@@ -21,9 +22,13 @@ my $opt_force;
 my $opt_template;
 my $opt_cmdargs;
 
+# template_dir: directory which contains the template configurations (.yaml files)
+# config_dir:   directory containing the input files to render (default: template_dir)
+
 GetOptions (
     "template=s"     => \$opt_template,
     "templatedir=s"  => \$template_dir,
+    "includedir=s"    => \$include_dir,
     "templateconfig=s@" => \$template_config_args,
     "set=s@"         => \$opt_cmdargs,
     "help"           => \$opt_help,
@@ -39,6 +44,9 @@ if (! -r $template_dir) {
     print STDERR "ERROR: Template directory $template_dir is not readable\n";
     exit 1;
 }
+
+$include_dir ||= $template_dir;
+
 
 if (! defined $opt_template) {
     print STDERR "No --template specified. Available templates:\n";
@@ -186,7 +194,7 @@ delete $templateconfig->{INTERPOLATE};
 $template = Template->new($templateconfig);
 
 foreach my $entry (keys %{$config->{files}}) {
-    my $infile  = File::Spec->catfile($template_dir, $entry);
+    my $infile  = File::Spec->catfile($include_dir, $entry);
     my $outfile = File::Spec->catfile($targetdir, $config->{files}->{$entry});
     my ($volume, $directory, $file) =
 	File::Spec->splitpath($outfile);
