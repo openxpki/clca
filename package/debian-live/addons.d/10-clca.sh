@@ -1,6 +1,9 @@
 # additional packages for this addon
 PACKAGES="$PACKAGES openssl"
 
+# required for provision tool
+PACKAGES="$PACKAGES libyaml-perl"
+
 # optional packages - useful for certain hardware tokens
 # smartcard support
 PACKAGES="$PACKAGES opensc libccid libengine-pkcs11-openssl"

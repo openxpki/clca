@@ -1,5 +1,5 @@
 # additional packages for this addon
-PACKAGES="$PACKAGES libclass-std-perl"
+PACKAGES="$PACKAGES libclass-std-perl libcrypt-cbc-perl"
 
 # files to install
 install -D -m 755 $BASE/bin/secret $TARGETROOT/usr/local/bin/secret
