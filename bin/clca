@@ -939,9 +939,10 @@ certify()
 	VALIDITY="$VALIDITY -enddate $ENDDATE "
     fi
     
+
     SERIAL=`$CAT $CADBDIR/serial`
     if [ -n "$SUBJECT" ] ; then SUBJECT="-subj '$SUBJECT'" ; fi
-    
+
     get_passphrase_cached
     export PASSPHRASE
     if [ ! -z ${PASSPHRASE+x} ] ; then
