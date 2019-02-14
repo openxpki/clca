@@ -354,7 +354,7 @@ EOF
 	    ;;
 	revoke)
 	    $CAT <<EOF
-Usage: clca [--profile <name>] revoke <serial number>
+Usage: clca revoke [--reason <reason>] [--compromisetime TIME] <serial number>
 
 Revokes the specified certificate. First the script checks if the 
 certificate exists in the certificate database and that it is 
@@ -362,11 +362,19 @@ still valid. If the corresponding certificate exists in the
 certificate directory the certificate is revoked after asking
 the user for approval.
 
-The user is asked if a new CRL should be issued after signing
-the request.
-If CRL generation is requested and --profile <name> is specified
-the CA script uses the specified section from openssl.cnf 
-for CRL generation instead of the CA default.
+If --reason is specified reason is recorded as revocation reason. Valid
+reason codes are
+unspecified, keyCompromise, CACompromise, affiliationChanged, superseded,
+cessationOfOperation
+
+If --compromisetime is specified, it denotes the point in zulu time the 
+certificate was compromised. TIME must have the format YYYYMMDDHHMMSSZ.
+The Z character at the end of the time spec is mandatory.
+If --compromisetime is set, the --reason is set to keyCompromise unless
+--reason is CACompromise.
+
+Example:
+clca revoke --reason keyCompromise --compromisetime 20190105120800Z 04
 
 EOF
 	    ;;
@@ -967,10 +975,25 @@ certify()
 revoke()
 {
     ID=""
+    REASON="unspecified"
     while [ -n "$1" ] ; do
 	case "$1" in
 	    --help)
 		showhelp revoke
+		abort 1
+		;;
+	    --reason)
+		REASON=$2
+		shift
+		shift
+		;;
+	    --compromisetime)
+		COMPROMISETIME=$2
+		shift
+		shift
+		;;
+	    --*)
+		echo "ERROR: invalid option $1"
 		abort 1
 		;;
 	    *)
@@ -984,6 +1007,28 @@ revoke()
 	showhelp revoke
 	abort 1
     fi
+
+    case $REASON in
+	unspecified|keyCompromise|CACompromise|affiliationChanged|superseded|cessationOfOperation)
+	    :
+	    ;;
+	*)
+	    echo "ERROR: invalid reason code $REASON"
+	    abort 1
+	    ;;
+    esac
+
+    if [ -n "$COMPROMISETIME" ] ; then
+	if ! echo $COMPROMISETIME | $EGREP '^\d{14}Z$' >/dev/null 2>&1 ; then
+	    echo "ERROR: --compromisetime argument must match YYYYMMDDHHMMSSZ"
+	    echo "       (including trailing Z)"
+	    abort 1
+	fi
+	if [ "$REASON" != "CACompromise" ] ; then
+	    REASON="keyCompromise"
+	fi
+    fi
+    
 
     FOUND=$((`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$ID\>" | wc -l`))
 
@@ -1014,6 +1059,16 @@ revoke()
 		export PASSPHRASE
 		if [ ! -z ${PASSPHRASE+x} ] ; then
 		    OPENSSLOPT="-passin env:PASSPHRASE"
+		fi
+
+		if [ -n "$COMPROMISETIME" ] ; then
+		    if [ "$REASON" = "CACompromise" ] ; then
+			OPENSSLOPT="$OPENSSLOPT -crl_CA_compromise $COMPROMISETIME"
+		    else
+			OPENSSLOPT="$OPENSSLOPT -crl_compromise $COMPROMISETIME"
+		    fi
+		else
+		    OPENSSLOPT="$OPENSSLOPT -crl_reason $REASON"
 		fi
 
 		$HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -revoke $CERTDIR/$SERIAL.pem $CONFIGARG
