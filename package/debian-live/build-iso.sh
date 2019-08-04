@@ -37,7 +37,12 @@ case $DISTRIBUTION in
         APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent username=\$USERNAME hostname=\$HOSTNAME"
 	TARGETROOT=config/includes.chroot
         ;;
-    *)
+    buster)
+        echo "Building for Debian Buster"
+        APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent username=\$USERNAME hostname=\$HOSTNAME"
+	TARGETROOT=config/includes.chroot
+        ;;
+     *)
         echo "ERROR: unsupported distribution $DISTRIBUTION"
         exit 1
         ;;
