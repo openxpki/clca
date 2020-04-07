@@ -111,7 +111,7 @@ Verify if the `etc/clca.cfg` and `etc/openssl.cnf` settings are OK.
 
 Run
 
-`$ clca initialize --startdate YYMMDDHHMMSS --enddate YYMMDDHHMMSS`
+`$ clca initialize --startdate DATESPEC --enddate DATESPEC`
 
 The script performes several sanity checks and refuses to overwrite
 an existing CA. If the CA certificates have been manually removed
@@ -122,6 +122,8 @@ Startdate and enddate are specified in UTC time zone. Note that the
 year must be specified with two digits only!
 
 Date/time may be specified in truncated form, omitting any number of "right-hand side" date/time components (e. g. "YYMM").
+
+Run `clca help datespec` for more details on the date specification.
 
 Unless you are using a HSM you will be prompted to enter 
 the PINs protecting the CA private key during the creation of the CA.
@@ -137,7 +139,7 @@ can be issued.
 
 Call
 
-`$ clca certify --profile PROFILE [--startdate YYMMDDHHMMSS --enddate YYMMDDHHMMSS] <request file>`
+`$ clca certify --profile PROFILE [--startdate DATESPEC --enddate DATESPEC] <request file>`
 
 in order to certify a PKCS #10 request. The request format (DER/PEM)
 is automatically detected.
@@ -153,6 +155,8 @@ The startdate and enddate options are optional and are specified in UTC time zon
 Note that the year must be specified with two digits only!
 
 Date/time may be specified in truncated form, omitting any number of "right-hand side" date/time components (e. g. "YYMM").
+
+Run `clca help datespec` for more details on the date specification.
 
 If no startdate/enddate is specified the default validity from the profile is used.
 

@@ -188,7 +188,7 @@ fi
 
 ######################################################################
 
-VERSION="1.8"
+VERSION="1.10"
 
 showhelp()
 {
@@ -291,7 +291,7 @@ EOF
 		;;
 	certify)
 	    $CAT <<EOF
-Usage: clca certify --profile <name> [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS] [--reqformat P10|SSCERT|KEY] [--subject <subject>] [--san TYPE:SAN] [--batch] <request file>
+Usage: clca certify --profile <name> [--startdate DATESPEC] [--enddate DATESPEC] [--reqformat P10|SSCERT|KEY] [--subject <subject>] [--san TYPE:SAN] [--batch] <request file>
 
 Signs a PKCS#10 certificate request (DER/PEM format is automatically
 detected). Certificate extensions and validity are determined by 
@@ -333,8 +333,8 @@ The certificate database is updated and a copy of the certificate
 is written to the file 'newcert.pem' in the current directory.
 
 If --startdate or --enddate are specified, these dates are used for
-the certificate's lifetime. The dates must be specified in the format
-YYMMDDHHMMSS and are interpreted as UTC times.
+the certificate's lifetime. The dates must be specified in the DATESPEC
+format and are interpreted as UTC times.
 The date specification can be abbreviated by omitting parts of the
 date/time specification (e. g. "YYMM" only). Omitted date/time components
 are initialized to the lowest possible value.
@@ -351,6 +351,7 @@ clca certify --profile endentity
   --san "otherName:1.3.6.1.4.1.311.20.2.3;UTF8:test@kerberos-domain.internal" foo.csr
 
 EOF
+	    showhelp datespec
 	    ;;
 	revoke)
 	    $CAT <<EOF
@@ -380,7 +381,7 @@ EOF
 	    ;;
 	initialize)
 	    $CAT <<EOF
-Usage: clca initialize [--req <filename>] [--startdate YYMMDDHHMMSS] [--enddate YYMMDDHHMMSS]
+Usage: clca initialize [--req <filename>] [--startdate DATESPEC] [--enddate DATESPEC]
 
 Initializes the CA database and creates either a self-signed certificate
 or a PKCS#10 certificate request. 
@@ -421,6 +422,7 @@ The following steps must be performed to create a CA:
 3. Create the CA using the initialize command
 
 EOF
+	    showhelp datespec
 	    ;;
 	check)
 	    $CAT <<EOF
@@ -452,7 +454,31 @@ YYYYMMDDHHMMSS-clca-backup.tar.gz in the current directory (caps replaced
 with timestamp).
 EOF
         ;;
-	    
+	datespec)
+	    $CAT <<EOF
+DATESPEC
+A DATESPEC is an absolute timestamp representing a point in time. Two different
+formats are supported:
+
+Truncated format ("traditional") format: YY[MM[DD[HH[MM]SS[Z]]]]]
+The truncated format uses a two-digit year representation and optionally allows
+any number of two-digit date/time specification components up to seconds.
+It is possible to specify only portions of the date, starting from the 
+left-hand side and leaving out the lower tier date components, e. g. "YY" or 
+"YYMMDD".
+The missing date elements are implicitly filled with the lowest sensible value
+(01 for months and days, 00 for hours, minutes and seconds).
+
+Complete format: YYYYMMDDHHMMSS[Z]
+If the specified timestamp is exactly 14 digits long it is assumed to contain
+a full date/time specification. A trailing "Z" is optional (see "Time zone").
+
+Time zone:
+A full DATESPEC always contains a time zone specification which is following the
+actual timestamp value. It may be omitted when specifying the timestamp on the command
+line. The default time zone is "Z" and specifies the UTC (Zulu) time zone.
+
+EOF
     esac
 }
 
@@ -529,7 +555,7 @@ EOF
     fi
 }
 
-# arg: user specified date, format YYMMDDHHMMSSZ
+# arg: DATESPEC, format YY[MM[DD[HH[MM]SS[Z]]]]] or YYYYMMDDHHMMSS[Z]
 # It is possible to specify only portions of the date, 
 # starting from the left-hand side and leave out the 
 # lower tier date components, e. g. "YY" or "YYMMDD".
@@ -539,18 +565,33 @@ EOF
 sanitize_openssl_date() {
     $PERL -e '
     my $date = shift;
-    my ($yy, $mm, $dd, $hh, $min, $ss, $z) = ($date =~ m{^(\d\d)(\d\d)?(\d\d)?(\d\d)?(\d\d)?(\d\d)?(Z)?$});
+
+    my $yy;
+    my $mm;
+    my $dd;
+    my $hh;
+    my $min;
+    my $ss;
+    my $z;
+
+    # check for YYYYMMDDHHMMSS[Z] syntax
+    ($yy, $mm, $dd, $hh, $min, $ss, $z) = ($date =~ m{^(\d\d\d\d)(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)(Z)?$});
+
+    # not a complete date spec, try the traditional (possibly truncated) one
+    if (! defined $yy) {
+       ($yy, $mm, $dd, $hh, $min, $ss, $z) = ($date =~ m{^(\d\d)(\d\d)?(\d\d)?(\d\d)?(\d\d)?(\d\d)?(Z)?$});
+    }
 
     if (! defined $yy) {
-        print STDERR "ERROR: specified date is not of the form YYMMDDHHMMSSZ (or a subset)\n";
+        print STDERR "ERROR: specified date is not of the form YY[MM[DD[HH[MM[SS[Z]]]]]] or YYYYMMDDHHMMSS[Z]\n";
         exit 1;
     }
 
-    if ($yy < 10 || $yy > 50) {
-        print STDERR "WARNING: Year 20$yy in date specification. Please double-check.\n";
+    if ($yy < 10 || ($yy > 50 && $yy < 100)) {
+        print STDERR "WARNING: Year 20$yy used in traditional date specification. Please double-check.\n";
     }
     if ($yy == 20) {
-        print STDERR "WARNING: Year 2020 specified. Please double-check.\n";
+        print STDERR "WARNING: Year 2020 specified in traditional date spec. Please double-check.\n";
     }
     $mm = "01" unless defined $mm;
     $dd = "01" unless defined $dd;
@@ -1502,6 +1543,10 @@ check()
 	    --help)
 		showhelp check
 		abort 1
+		;;
+	    --testdate)
+		sanitize_openssl_date $2
+		abort 0
 		;;
 	    *)
 		showhelp check
