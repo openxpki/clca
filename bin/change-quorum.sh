@@ -86,7 +86,7 @@ read
 
 eval `secret generate --k $K_NEW --n $N_NEW`
 
-openssl pkey -in $KEY_OLD -out $KEY_NEW -passin env:PASSPHRASE_OLD -passout env:PASSPHRASE
+openssl pkey -in $KEY_OLD -out $KEY_NEW -passin env:PASSPHRASE_OLD -aes256 -passout env:PASSPHRASE
 
 if [ $? != 0 ] ; then
     echo "Error: could not re-encrypt private key"
