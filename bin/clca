@@ -188,7 +188,7 @@ fi
 
 ######################################################################
 
-VERSION="1.10"
+VERSION="1.12"
 
 showhelp()
 {
@@ -992,11 +992,16 @@ certify()
     SERIAL=`$CAT $CADBDIR/serial`
     if [ -n "$SUBJECT" ] ; then SUBJECT="-subj '$SUBJECT'" ; fi
 
+    if [ "$RANDOMIZE_SERIAL" == "1" ] ; then
+	OPENSSLOPT="-rand_serial"
+    fi
+    
     get_passphrase_cached
     export PASSPHRASE
     if [ ! -z ${PASSPHRASE+x} ] ; then
-	OPENSSLOPT="-passin env:PASSPHRASE"
+	OPENSSLOPT="$OPENSSLOPT -passin env:PASSPHRASE"
     fi
+
 
     # Note: set 'BATCH=-batch' to cause openssl to run in batch mode
     eval $HSM_PRELOAD $OPENSSL ca $BATCH $KEYARG $OPENSSLOPT -name $PROFILE $VALIDITY $SUBJECT -cert $CACERT -out newcert.pem -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
