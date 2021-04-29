@@ -1417,9 +1417,9 @@ initialize()
     echo "* Initializing certificate index file"
     $TOUCH $CADBDIR/index.txt
     echo "* Initializing serial numbers"
-    $CAT > $CADBDIR/serial <<EOF
-01
-EOF
+
+    $OPENSSL rand -hex 20 > $CADBDIR/serial
+
     echo "* Initializing CRL index"
     $CAT > $CADBDIR/crlnumber.txt <<EOF
 01
