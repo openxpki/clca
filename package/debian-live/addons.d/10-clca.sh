@@ -1,18 +1,8 @@
 # additional packages for this addon
-PACKAGES="$PACKAGES openssl"
 
 # required for provision tool
 PACKAGES="$PACKAGES libyaml-perl"
 
-# optional packages - useful for certain hardware tokens
-# smartcard support
-PACKAGES="$PACKAGES opensc libccid libengine-pkcs11-openssl"
-# yubikey personalization
-PACKAGES="$PACKAGES yubikey-personalization yubikey-personalization-gui"
-#PACKAGES="$PACKAGES yubico-piv-tool ykcs11"
-# gnupg-agent
-PACKAGES="$PACKAGES gnupg-agent"
-# java and bouncy castle
 PACKAGES="$PACKAGES default-jre-headless libbcprov-java"
 
 # files to install

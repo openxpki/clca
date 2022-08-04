@@ -15,6 +15,14 @@ PACKAGES=""
 
 #DRYRUN=1
 
+# hook-post-build is executed after the build, this may be overridden in the rc files
+hook-post-build() {
+    :
+}
+
+[ -r "build-iso.rc" ] && . build-iso.rc
+[ -r "build-iso-local.rc" ] && . build-iso-local.rc
+
 DISTRIBUTION=`lsb_release -c | awk '{ print $2 }'`
 if [ $? != 0 ] ; then
     echo "ERROR: could not run lsb_release"
@@ -42,7 +50,12 @@ case $DISTRIBUTION in
         APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent username=\$USERNAME hostname=\$HOSTNAME"
 	TARGETROOT=config/includes.chroot
         ;;
-     *)
+    bullseye)
+        echo "Building for Debian Bullseye" 
+        APPEND_OPTIONS="$APPEND_OPTIONS boot=live config persistence silent username=\$USERNAME hostname=\$HOSTNAME"
+	TARGETROOT=config/includes.chroot
+        ;;
+      *)
         echo "ERROR: unsupported distribution $DISTRIBUTION"
         exit 1
         ;;
@@ -83,9 +96,9 @@ if [ -d "addons.d" ]; then
    done
 fi
 
-LB_OPTIONS="--iso-application $ORGANIZATION-Live-RootCA \
---iso-publisher OpenXPKI \
---iso-volume $ORGANIZATION-Live-RootCA \
+LB_OPTIONS="--iso-application clca-Live-CA-Environment \
+--iso-publisher '$ORGANIZATION' \
+--iso-volume '$ORGANIZATION clca Live CA Environment' \
 --distribution $DISTRIBUTION"
 
 [ -n "$ARCHITECTURE" ] && LB_OPTIONS="$LB_OPTIONS --architectures \"$ARCHITECTURE\""
@@ -124,6 +137,8 @@ if [ $? != 0 ] ; then
 	echo "ERROR: lb build failed"
 	exit 1
 fi
+
+hook-post-build
 
 echo "Build is complete. To clean up, run 'lb clean; rm -rf ./config'"
 
