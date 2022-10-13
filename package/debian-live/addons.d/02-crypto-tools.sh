@@ -1,5 +1,5 @@
 # additional packages for this addon
-PACKAGES="$PACKAGES openssl"
+PACKAGES="$PACKAGES openssl usbutils net-tools"
 
 # optional packages - useful for certain hardware tokens
 # smartcard support

@@ -9,23 +9,28 @@ the live-build package).
 The base build contains the base tools clca (for CA operation) and
 secret (for optional secret sharing).
 
-## Custom build
+## Build time customization
 
 ### Thales/nCipher nFast HSM support
-The addon script addons.d/50-nfast.sh scans for the distribution files
-of the Thales/nCipher nFast drivers in this directory.
+NOTE: nCipher driver inclusion is not supported by clca Community Edition
+
+The addon script addons.d/05-nfast.sh scans for the distribution files
+of the Thales/nCipher nFast drivers in the directory ./contrib
 
 If the addon detects a file with the file pattern
 
-nCSS-linux-user-*zip
+SecWorld*.iso
 
-in this directory, it will automatically include the drivers in the
-generated ISO.
+in the contrib directory, it will mount the iso file on a temporary
+mount point and automatically include the nCipher drivers in this ISO
+image in the generated ISO.
 
 In addition, the default user is changed from "user" to "nfast" to
 make HSM operations easier for the operator.
 
 ### Luna SA support
+NOTE: Luna support is probably deprecated.
+
 The addon script addons.d/50-luna-hsm.sh scans for SafeNet Luna HSM drivers
 in the directory luna/ in this directory.
 Place the contents of the directory luna_hsm/drivers/linux/64/ in this
@@ -35,6 +40,14 @@ Obtain the support file
 *OPENSSL_TOOLKIT_LunaSA_*.tar
 and also copy it to this directory. As of this writing (2015-11-29)
 this support document can be obtained from SafeNet via document ID DOW4073.
+
+
+### Boot splash logo
+
+If either contrib/splash.svg or contrib/splash.png exists, the respective
+file is included as a splash logo image during the build process. The
+image is displayed "full screen" as a background to boot option selection
+menu.
 
 ## Persistence
 
@@ -51,7 +64,7 @@ In short:
 - umount /mnt
 
 
-## Customizing options
+## Runtime customizing options
 
 ### Custom startup exection
 
