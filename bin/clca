@@ -5,7 +5,7 @@
 # Copyright (c) 2004-2013 Martin Bartosch, Cynops GmbH
 #
 # 2004-04-26 Martin Bartosch; Cynops GmbH <m.bartosch@cynops.de>
-# 2018 Martin Bartosch; White Rabbit Security GmbH
+# 2004-2022 Martin Bartosch; White Rabbit Security GmbH
 #
 # This software is distributed under the GNU General Public License - see the
 # accompanying LICENSE file for more details.
@@ -66,7 +66,7 @@ get_passphrase() {
 get_passphrase_cached() {
     local CLEARTEXT_PASSPHRASE
     
-    if [ -z ${ENCRYPTED_PASSPHRASE+x} ] ; then
+    if [ -z "${ENCRYPTED_PASSPHRASE}" ] ; then
 	
 	while : ; do
 	    CLEARTEXT_PASSPHRASE="$(get_passphrase)"
@@ -94,7 +94,7 @@ get_passphrase_cached() {
 	done
 
 	export CLCA_SESSION_KEY
-	ENCRYPTED_PASSPHRASE=`echo "$CLEARTEXT_PASSPHRASE" | $OPENSSL enc -aes256 -a -e -pass env:CLCA_SESSION_KEY`
+	ENCRYPTED_PASSPHRASE=`echo "$CLEARTEXT_PASSPHRASE" | $OPENSSL enc -aes256 -a -e -pbkdf2 -pass env:CLCA_SESSION_KEY`
 	if [ "$?" != 0 ] ; then
 	    echo "ERROR: could not encrypt passphrase"
 	    abort 1
@@ -106,7 +106,7 @@ get_passphrase_cached() {
     else
 	# passphrase has been set, decrypt and return
 	export CLCA_SESSION_KEY
-	PASSPHRASE=`echo "$ENCRYPTED_PASSPHRASE" | $OPENSSL enc -aes256 -a -d -pass env:CLCA_SESSION_KEY`
+	PASSPHRASE=`echo "$ENCRYPTED_PASSPHRASE" | $OPENSSL enc -aes256 -a -d -pbkdf2 -pass env:CLCA_SESSION_KEY`
 	if [ "$?" != 0 ] ; then
 	    echo "ERROR: could not decrypt passphrase"
 	    abort 1
@@ -172,7 +172,7 @@ for i in $TOOLS ; do
     CMDLIST="$CMDLIST $cmd"
 done
 
-for i in $OPENSSL $HSM_PRELOAD ; do
+for i in $OPENSSL ; do
     if [ ! -x $i ] ; then
         echo "Could not find executable $i"
         echo "Fix configuration file $CFG"
@@ -355,10 +355,17 @@ EOF
 	    ;;
 	revoke)
 	    $CAT <<EOF
-Usage: clca revoke [--reason <reason>] [--compromisetime TIME] <serial number>
+Usage: clca revoke [--reason <reason>] [--compromisetime TIME] <serial number|certificate file>
 
-Revokes the specified certificate. First the script checks if the 
-certificate exists in the certificate database and that it is 
+Revokes the specified certificate. The certificate can be specified
+implicitly (as the PEM encoded X.509 certificate file name) or
+as its serial number. 
+NOTE that referencing the certificate by serial number is not possible 
+if RANDOMIZE_SERIAL is set, in this case the certificate must be 
+specified via its file name.
+
+If the serial number is specified instead of a file name the script checks 
+if the certificate exists in the certificate database and that it is 
 still valid. If the corresponding certificate exists in the
 certificate directory the certificate is revoked after asking
 the user for approval.
@@ -402,9 +409,8 @@ It is safe to call this function after creating the database,
 as it will detect that a CA has already been created and terminate
 with a notification message without modifying any data.
 
-If the CA certificates (cacert.pem and cacert.der) have been removed
-the script will move the current database to the directory 
-$CA_HOME/attic and initialize a new CA.
+If any of the CA directories (ca/certs/crl) already exist, the script
+will terminate with an error.
 
 The following steps must be performed to create a CA:
 
@@ -698,7 +704,7 @@ genkey()
 		echo "****************************************************************"
 		echo
 	    fi
-	    if [ ! -z ${PASSPHRASE+x} ] ; then
+	    if [ -n "${PASSPHRASE}" ] ; then
 		OPENSSLOPT="$OPENSSLOPT -passout env:PASSPHRASE -$ENCALG"
 	    fi
 	    ;;
@@ -792,7 +798,7 @@ certify()
 		shift
 		;;
             --batch)
-                BATCH="-batch"
+                BATCH=1
                 shift
                 ;;
             --help)
@@ -900,7 +906,7 @@ certify()
 	P10|PKCS10)
 	    echo "PKCS 10 request"
 	    INFORM=der
-	    if $HEAD -1 $REQ | $GREP "BEGIN.*CERTIFICATE REQUEST" >/dev/null 2>&1 ; then
+	    if $GREP "BEGIN.*CERTIFICATE REQUEST" $REQ >/dev/null 2>&1 ; then
 		INFORM=pem
 		INFILE="$REQ"
 	    else
@@ -919,7 +925,7 @@ certify()
 	SSCERT|CERT)
 	    echo "self signed cert request"
 	    INFORM=der
-	    if $HEAD -1 $REQ | $GREP "BEGIN.*CERTIFICATE" >/dev/null 2>&1 ; then
+	    if $GREP "BEGIN.*CERTIFICATE" $REQ >/dev/null 2>&1 ; then
 		INFORM=pem
 		INFILE="$REQ"
 	    else
@@ -953,7 +959,7 @@ certify()
 		get_passphrase_cached
 		export PASSPHRASE
 	    fi
-	    if [ ! -z ${PASSPHRASE+x} ] ; then
+	    if [ -n "${PASSPHRASE}" ] ; then
 		OPENSSLOPT="-passin env:PASSPHRASE"
 	    fi
 	    
@@ -978,7 +984,9 @@ certify()
     if [ "$ENGINE" = "openssl" ] ; then
 	KEYARG="-keyfile $CAPRIVDIR/$ROOTKEYNAME"
     else
-	KEYARG="-keyfile $ROOTKEYNAME -keyform engine -engine $ENGINE"
+	# the openssl ca command uses -keyfile instead of -key for the key attribute.
+	# and -key means something different here. seriously.
+	KEYARG="-engine $ENGINE -keyform engine -keyfile \"$ROOTKEYNAME\""
     fi
 
     if [ -n "$STARTDATE" ] ; then
@@ -998,13 +1006,17 @@ certify()
     
     get_passphrase_cached
     export PASSPHRASE
-    if [ ! -z ${PASSPHRASE+x} ] ; then
+    if [ -n "${PASSPHRASE}" ] ; then
 	OPENSSLOPT="$OPENSSLOPT -passin env:PASSPHRASE"
     fi
 
 
-    # Note: set 'BATCH=-batch' to cause openssl to run in batch mode
-    eval $HSM_PRELOAD $OPENSSL ca $BATCH $KEYARG $OPENSSLOPT -name $PROFILE $VALIDITY $SUBJECT -cert $CACERT -out newcert.pem -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
+    # Note: set BATCH to a nonempty value to activate openssl batch mode
+    if [ -n "$BATCH" ] ; then
+	OPENSSLOPT="$OPENSSLOPT -batch"
+    fi
+    
+    eval $HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -name $PROFILE $VALIDITY $SUBJECT -cert $CACERT -out newcert.pem -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
 
     if [ "$?" != 0 ] ; then
 	echo "ERROR: Certification failed."
@@ -1065,7 +1077,7 @@ revoke()
     esac
 
     if [ -n "$COMPROMISETIME" ] ; then
-	if ! echo $COMPROMISETIME | $EGREP '^\d{14}Z$' >/dev/null 2>&1 ; then
+	if ! echo $COMPROMISETIME | $EGREP '^[[:digit:]]{14}Z$' >/dev/null 2>&1 ; then
 	    echo "ERROR: --compromisetime argument must match YYYYMMDDHHMMSSZ"
 	    echo "       (including trailing Z)"
 	    abort 1
@@ -1074,68 +1086,85 @@ revoke()
 	    REASON="keyCompromise"
 	fi
     fi
+
+    CERT_TO_REVOKE=""
     
+    if [ -e "$ID" ] ; then
+	# certificate file specified
+	CERT_TO_REVOKE="$ID"
+	
+    else
+	# try to identify certificate by serial number
 
-    FOUND=$((`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$ID\>" | wc -l`))
-
-    case $FOUND in
-	0)
-	    echo "No matching valid certificate found for serial number '$ID'"
-	    abort 0
-	    ;;
-	1)
-	    SERIAL=`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$ID\>" | $CUT -f2`
-	    if [ -r $CERTDIR/$SERIAL.pem ] ; then
-		echo "Revoking certificate with serial number '$SERIAL':"
-		
-		$OPENSSL x509 -in $CERTDIR/$SERIAL.pem -subject -dates -serial -fingerprint -noout
-		if [ "$?" != 0 ] ; then
-		    echo "ERROR: Could not decode X.509 certificate $CERTDIR/$SERIAL.pem. Should not happen."
-		    abort 1
-		fi
-		
-
-		if [ "$ENGINE" = "openssl" ] ; then
-		    KEYARG="-keyfile $CAPRIVDIR/$ROOTKEYNAME"
-		else
-		    KEYARG="-keyfile $ROOTKEYNAME -keyform engine -engine $ENGINE"
-		fi
-
-		get_passphrase_cached
-		export PASSPHRASE
-		if [ ! -z ${PASSPHRASE+x} ] ; then
-		    OPENSSLOPT="-passin env:PASSPHRASE"
-		fi
-
-		if [ -n "$COMPROMISETIME" ] ; then
-		    if [ "$REASON" = "CACompromise" ] ; then
-			OPENSSLOPT="$OPENSSLOPT -crl_CA_compromise $COMPROMISETIME"
-		    else
-			OPENSSLOPT="$OPENSSLOPT -crl_compromise $COMPROMISETIME"
+	FOUND=$((`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$ID\>" | wc -l`))
+	
+	case $FOUND in
+	    0)
+		echo "No matching valid certificate found for serial number '$ID'"
+		abort 0
+		;;
+	    1)
+		SERIAL=`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$ID\>" | $CUT -f2`
+		if [ -r $CERTDIR/$SERIAL.pem ] ; then
+		    echo "Revoking certificate with serial number '$SERIAL':"
+		    
+		    $OPENSSL x509 -in $CERTDIR/$SERIAL.pem -subject -dates -serial -fingerprint -noout
+		    if [ "$?" != 0 ] ; then
+			echo "ERROR: Could not decode X.509 certificate $CERTDIR/$SERIAL.pem. Should not happen."
+			abort 1
 		    fi
-		else
-		    OPENSSLOPT="$OPENSSLOPT -crl_reason $REASON"
-		fi
 
-		$HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -revoke $CERTDIR/$SERIAL.pem $CONFIGARG
-		if [ $? != 0 ] ; then
-		    echo "ERROR: Could not revoke certificate."
+		    CERT_TO_REVOKE=$CERTDIR/$SERIAL.pem
+		    
+		else
+		    echo "ERROR: Certificate file $CERTDIR/$SERIAL.pem not found"
 		    abort 1
 		fi
-		unset PASSPHRASE
-
-		issue_crl
-	    else
-		echo "ERROR: Certificate file $CERTDIR/$SERIAL.pem not found"
+		;;
+	    *)
+		echo "ERROR: More than one certificate found."
 		abort 1
-	    fi
-	    ;;
-	*)
-	    echo "ERROR: More than one certificate found."
-	    abort 1
-	    ;;
-    esac
+		;;
+	esac
+    fi
 
+    if [ ! -r "$CERT_TO_REVOKE" ] ; then
+	echo "ERROR: could not read certificate file $CERT_TO_REVOKE"
+	abort 1
+    fi
+      
+
+    if [ "$ENGINE" = "openssl" ] ; then
+	KEYARG="-keyfile $CAPRIVDIR/$ROOTKEYNAME"
+    else
+	KEYARG="-engine $ENGINE -keyform engine -keyfile \"$ROOTKEYNAME\""
+    fi
+    
+    get_passphrase_cached
+    export PASSPHRASE
+    if [ -n "${PASSPHRASE}" ] ; then
+	OPENSSLOPT="-passin env:PASSPHRASE"
+    fi
+    
+    if [ -n "$COMPROMISETIME" ] ; then
+	if [ "$REASON" = "CACompromise" ] ; then
+	    OPENSSLOPT="$OPENSSLOPT -crl_CA_compromise $COMPROMISETIME"
+	else
+	    OPENSSLOPT="$OPENSSLOPT -crl_compromise $COMPROMISETIME"
+	fi
+    else
+	OPENSSLOPT="$OPENSSLOPT -crl_reason $REASON"
+    fi
+    
+    eval $HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -revoke $CERT_TO_REVOKE $CONFIGARG
+    
+    if [ $? != 0 ] ; then
+	echo "ERROR: Could not revoke certificate."
+	abort 1
+    fi
+    unset PASSPHRASE
+		    
+    echo "INFO: It is recommended to issue a CRL after revoking a certificate."
 }
 
 ######################################################################
@@ -1231,16 +1260,18 @@ issue_crl()
     if [ "$ENGINE" = "openssl" ] ; then
 	KEYARG="-keyfile $CA_HOME/private/$ROOTKEYNAME"
     else
-	KEYARG="-keyfile $ROOTKEYNAME -keyform engine -engine $ENGINE"
+	# the openssl ca command uses -keyfile instead of -key for the key attribute.
+	# and -key means something different here. seriously.
+	KEYARG="-engine $ENGINE -keyform engine -keyfile \"$ROOTKEYNAME\""
     fi
 
     get_passphrase_cached
     export PASSPHRASE
-    if [ ! -z ${PASSPHRASE+x} ] ; then
+    if [ -n "${PASSPHRASE}" ] ; then
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
     
-    $HSM_PRELOAD $OPENSSL ca -gencrl $KEYARG $OPENSSLOPT -out $CRLFILE $CONFIGARG
+    eval $HSM_PRELOAD $OPENSSL ca -gencrl $KEYARG $OPENSSLOPT -out $CRLFILE $CONFIGARG
     if [ $? != 0 ] ; then
 	echo "ERROR: Could not issue CRL."
 	$RM -f $CRLFILE
@@ -1325,6 +1356,9 @@ initialize()
 		FOUND=1
 	    fi
 	    ;;
+	pkcs11)
+	    FOUND=1
+	    ;;
 	*)
 	    echo "ERROR: Engine '$ENGINE' not supported yet"
 	    abort 1
@@ -1350,36 +1384,22 @@ initialize()
 	abort 1;
     fi
 
-    if [ -e $CACERT -o -e $CADBDIR/`$BASENAME $CACERT .pem`.der ] ; then
-	echo "CA Certificate already exists. Bailing out."
-	echo "If you wish to clear this CA and start with a new one remove the following"
-	echo "files and directories:"
-	if [ "$ENGINE" = "openssl" ] ; then
-	    
-	    echo "# rm -rf $CAPRIVDIR # only if you wish to erase the private key"
-	fi
-	echo "rm -rf $CADBDIR"
-	echo "rm -rf $CERTDIR"
-	echo "rm -rf $CRLDIR"
-	abort 1
-    fi
-
-    echo "Creating a new CA..."
-
-    if [ -d $CADBDIR ] ; then
-	ATTIC=$CA_HOME/attic
-	echo "INFO: Existing CA will be kept as backup"
-	
-	if [ -d $ATTIC ] ; then
-	    echo "ERROR: Old backup $ATTIC is in the way, please correct this."
+    for DIR in $CADBDIR $CERTDIR $CRLDIR ; do
+	if [ -e $DIR ] ; then
+	    echo "* ERROR: $DIR already exists, bailing out."
+	    echo "Hint: If you wish to clear this CA and start with a new one remove the following files and directories:"
+	    if [ "$ENGINE" = "openssl" ] ; then
+		
+		echo "# rm -rf $CAPRIVDIR # only if you wish to erase the private key"
+	    fi
+	    echo "rm -rf $CADBDIR"
+	    echo "rm -rf $CERTDIR"
+	    echo "rm -rf $CRLDIR"
 	    abort 1
 	fi
-	$MKDIR -p $ATTIC || abort 1
-	for i in $CADBDIR $CERTDIR $CRLDIR ; do
-	    $MV -f $i $ATTIC || echo -e "ERROR"
-	    echo "* Saved old $i to $ATTIC"
-	done
-    fi
+    done
+
+    echo "Creating a new CA..."
     
     echo -e "* Adjusting $CNF file"
     $MKDIR -p $CADBDIR
@@ -1400,18 +1420,15 @@ initialize()
     
     echo "* Initializing CA"
     
-    if [ "$ENGINE" = "openssl" ] ; then
+    if [ ! -s $CAPRIVDIR/.rand ] ; then
 	echo "Initialize random seed"
-    #
+	$MKDIR -p $CAPRIVDIR
 	$DD if=/dev/urandom of=$CA_HOME/private/.rand bs=1 count=1024
 	$CHMOD 600 $CAPRIVDIR/.rand
 	if [ "`$WC -c $CAPRIVDIR/.rand | awk '{print $1}'`" != "1024" ] ; then
 	    echo "ERROR: Could not read enough random data from /dev/random, rerun this script"
 	    abort 1
 	fi
-	echo "* Set path to random seed"
-    #
-	export RANDFILE=$CAPRIVDIR/.rand
     fi
     
     echo "* Initializing certificate index file"
@@ -1430,7 +1447,7 @@ EOF
     if [ "$ENGINE" = "openssl" ] ; then
 	KEYARG="-key $CAPRIVDIR/$ROOTKEYNAME"
     else
-	KEYARG="-key $ROOTKEYNAME -keyform engine -engine $ENGINE"
+	KEYARG="-engine $ENGINE -keyform engine -key \"$ROOTKEYNAME\" "
     fi
     
     if [ -z "$CAREQ" ]; then
@@ -1470,15 +1487,15 @@ EOF
     
     get_passphrase_cached
     export PASSPHRASE
-    if [ ! -z ${PASSPHRASE+x} ] ; then
+    if [ -n "${PASSPHRASE}" ] ; then
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
 
     if [ -n "${CA_VALIDITY}" ] ; then
 	OPENSSLOPT="$OPENSSLOPT -days $CA_VALIDITY"
     fi
-    
-    $HSM_PRELOAD $OPENSSL req $OPENSSLOPT -new $X509ARG $KEYARG -out $OUT $CONFIGARG
+
+    eval $HSM_PRELOAD $OPENSSL req $OPENSSLOPT -new $X509ARG $KEYARG -out $OUT $CONFIGARG
 
     if [ $? != 0 ] ; then
 	echo "ERROR: Something went wrong, could not create $OUT."
@@ -1513,10 +1530,9 @@ EOF
 	unset PROFILE
 
  	CACERT="$SAVED_CACERT"
- 	$RM -f newcert.pem
 
 	# install ca certificate
- 	$MV $CERTDIR/$SERIAL.pem $CACERT
+ 	$MV newcert.pem $CACERT
 
 	# restore previous serial number
  	echo "$SAVED_SERIAL" >$CADBDIR/serial
@@ -1541,6 +1557,8 @@ EOF
 
 }
 
+
+###########################################################################
 check() 
 {
     while [ -n "$1" ] ; do
