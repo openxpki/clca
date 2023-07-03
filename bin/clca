@@ -47,6 +47,16 @@ EOF
 
 trap traphandler 2 3
 
+######################################################################
+# hooks (may be overridden in clca.cfg)
+
+hook_init() {
+   :
+}
+
+hook_exit() {
+   :
+}
 
 # default passphrase prompt
 # return 0 means that a passphrase has been echoed to stdout
@@ -188,7 +198,7 @@ fi
 
 ######################################################################
 
-VERSION="1.15"
+VERSION="1.16"
 
 showhelp()
 {
@@ -1684,18 +1694,6 @@ get_certificate_profiles() {
             }
         }' $1 <$CNF
 }
-
-######################################################################
-# hooks (may be overridden in clca.cfg)
-
-hook_init() {
-   :
-}
-
-hook_exit() {
-   :
-}
-
 
 ######################################################################
 # main
