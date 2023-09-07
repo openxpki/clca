@@ -12,7 +12,7 @@
 #
 
 # Installation directory - change this to reflect your setup
-CA_HOME="$PWD"
+CA_HOME="${CLCA_HOME_DIR:-$PWD}"
 CFG=$CA_HOME/etc/clca.cfg
 
 # common commands - change settings to suit your system
