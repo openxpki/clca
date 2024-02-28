@@ -301,7 +301,7 @@ EOF
 		;;
 	certify)
 	    $CAT <<EOF
-Usage: clca certify --profile <name> [--startdate DATESPEC] [--enddate DATESPEC] [--reqformat P10|SSCERT|KEY] [--subject <subject>] [--san TYPE:SAN] [--batch] <request file>
+Usage: clca certify --profile <name> [--startdate DATESPEC] [--enddate DATESPEC] [--days DAYS] [--reqformat P10|SSCERT|KEY] [--subject <subject>] [--san TYPE:SAN] [--batch] <request file>
 
 Signs a PKCS#10 certificate request (DER/PEM format is automatically
 detected). Certificate extensions and validity are determined by 
@@ -348,8 +348,11 @@ format and are interpreted as UTC times.
 The date specification can be abbreviated by omitting parts of the
 date/time specification (e. g. "YYMM" only). Omitted date/time components
 are initialized to the lowest possible value.
-If --startdate/--enddate are not specified the default certificate 
-validity is used.
+If --days is specified, the generated certificates is valid for the
+specified number of days. (Note that unexpected behavior may result if
+combined with --startdate.)
+If neither --startdate, --enddate nor --days are specified the default
+certificate validity is used.
 
 If --batch is specified the underlying openssl commmand will be called
 in batch mode (useful for calling in shell scripts).
@@ -789,6 +792,14 @@ certify()
 		shift
 		shift
 		;;
+	    --days)
+		DAYS=$2
+		if [ -z "$DAYS" ] ; then
+		    abort 1
+		fi
+		shift
+		shift
+		;;
 	    --reqformat)
 		# optional request format
 		# possible values: "SSCERT"
@@ -1003,7 +1014,17 @@ certify()
 	VALIDITY="-startdate $STARTDATE "
     fi
     if [ -n "$ENDDATE" ] ; then
+	if [ -n "$DAYS" ] ; then
+	    echo "ERROR: --notafter/--enddate and --days are mutually exclusive"
+	    abort 1
+	fi
 	VALIDITY="$VALIDITY -enddate $ENDDATE "
+    fi
+    if [ -n "$DAYS" ] ; then
+	if [ -n "$STARTDATE" ] ; then
+	    echo "WARNING: using --startdate/--notbefore and --days does not work as expected, --days is interpreted as relative to NOW, not to --notbefore"
+	fi
+	VALIDITY="$VALIDITY -days $DAYS "
     fi
     
 
