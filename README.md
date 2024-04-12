@@ -66,7 +66,7 @@ Only required for Gemalto SafeNet Luna SA HSM support:
 Only required for software CA support with simple passphrase:
 - create a `private` directory in `$CA_HOME`
 - adapt the RSA key name in `clca.cfg`
-- run `openssl genrsa -des3 $CA_HOME/private/<keyname>`
+- run `openssl genrsa -des3 -out $CA_HOME/private/<keyname>`
 
 See [README.keyceremony-shared-interactive.md]() for an example using Secret Sharing.
 
