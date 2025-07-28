@@ -198,7 +198,7 @@ fi
 
 ######################################################################
 
-VERSION="1.17"
+VERSION="1.19"
 
 showhelp()
 {
@@ -731,6 +731,9 @@ genkey()
 	    abort1
 	    ;;
     esac
+
+    mkdir -p $CAPRIVDIR
+    
     case "$ALGORITHM" in
 	rsa)
 	    $OPENSSL genrsa $OPENSSLOPT -out "$KEYFILE" $KEYSIZE
@@ -942,6 +945,9 @@ certify()
 		fi
 	    fi
 	    REQUESTINPUT="-in $INFILE"
+	    # parse request before signing
+	    echo "Request to certify:"
+	    $OPENSSL req -text -noout -in $INFILE
 	    ;;
 	SSCERT|CERT)
 	    echo "self signed cert request"
@@ -961,6 +967,8 @@ certify()
 		fi
 	    fi
 	    REQUESTINPUT="-ss_cert $INFILE"
+	    echo "Request to certify:"
+	    $OPENSSL x509 -text -noout -in $INFILE
 	    ;;
 	KEY)
 	    if [ -z "$SUBJECT" ] ; then
@@ -992,6 +1000,8 @@ certify()
 	    unset PASSPHRASE
 	    
 	    REQUESTINPUT="-in $INFILE"
+	    echo "Request to certify:"
+	    $OPENSSL req -text -noout -in $INFILE
 	    ;;
 	*)
 	    echo "ERROR: Unsupported request format '$REQFORMAT' specified"
