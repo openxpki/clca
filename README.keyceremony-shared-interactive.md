@@ -6,7 +6,7 @@ This is an example runbook for an interactive key ceremony using Secret Sharing.
 # Creation of a secret share set and CA initialization
 
 Assumptions:
-2048 Bit RSA key protected by a 128 Bit random pass phrase.
+3072 Bit RSA key protected by a 128 Bit random pass phrase.
 The pass phrase is split into 5 shares, of which 3 will be needed to perform CA operations.
 
 
@@ -34,7 +34,7 @@ EOF
 
 Required: you need N=5 persons for safekeeping of the CA shares.
 
-eval `./bin/secret generate  --n $N --k $K` openssl genrsa -aes256 -passout env:PASSPHRASE -out dummyca/private/rsa-rootkey 2048
+eval `./bin/secret generate  --n $N --k $K` openssl genrsa -aes256 -passout env:PASSPHRASE -out dummyca/private/rsa-rootkey 3072
 
 Each share holder must copy the displayed share literally and keep it.
 

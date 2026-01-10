@@ -1,5 +1,5 @@
 # CLCA command line CA script
-Copyright (c) 2004 - 2018 Martin Bartosch, WhiteRabbitSecurity GmbH
+Copyright (c) 2004 - 2026 Martin Bartosch, WhiteRabbitSecurity GmbH
 
 This software is distributed under the GNU General Public License - see the
 accompanying LICENSE file for more details.
@@ -66,7 +66,7 @@ Only required for Gemalto SafeNet Luna SA HSM support:
 Only required for software CA support with simple passphrase:
 - create a `private` directory in `$CA_HOME`
 - adapt the RSA key name in `clca.cfg`
-- run `openssl genrsa -des3 -out $CA_HOME/private/<keyname>`
+- run `openssl genrsa -aes256 -out $CA_HOME/private/<keyname>`
 
 See [README.keyceremony-shared-interactive.md]() for an example using Secret Sharing.
 
@@ -121,7 +121,8 @@ to the directory `attic/` and a new CA is created.
 Startdate and enddate are specified in UTC time zone. Note that the
 year must be specified with two digits only!
 
-Date/time may be specified in truncated form, omitting any number of "right-hand side" date/time components (e. g. "YYMM").
+Date/time may be specified in truncated form, omitting any number 
+of "right-hand side" date/time components (e. g. "YYMM").
 
 Run `clca help datespec` for more details on the date specification.
 

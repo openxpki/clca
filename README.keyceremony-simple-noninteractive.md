@@ -27,7 +27,7 @@ EOF
 
 2. Generate CA key and perform secret sharing.
 
-PASSPHRASE="1234" openssl genrsa -aes256 -passout env:PASSPHRASE -out dummyca/private/rsa-rootkey 2048
+PASSPHRASE="1234" openssl genrsa -aes256 -passout env:PASSPHRASE -out dummyca/private/rsa-rootkey 3072
 
 3. Create the CA certificate
 
