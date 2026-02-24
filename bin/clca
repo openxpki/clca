@@ -75,9 +75,9 @@ get_passphrase() {
 # NOTE: callers should unset the PASSPHRASE variable after use
 get_passphrase_cached() {
     local CLEARTEXT_PASSPHRASE
-    
+
     if [ -z "${ENCRYPTED_PASSPHRASE}" ] ; then
-	
+
 	while : ; do
 	    CLEARTEXT_PASSPHRASE="$(get_passphrase)"
 	    RC=$?
@@ -93,7 +93,7 @@ get_passphrase_cached() {
 		echo "FATAL: Null passphrase"
 		abort 1
 	    fi
-	
+
 	    if verify_passphrase "$CLEARTEXT_PASSPHRASE" ; then
 		break
 	    fi
@@ -143,7 +143,7 @@ verify_passphrase() {
 	unset TMPPASS
 	return 1
     fi
-    
+
     # assume login is successful with non-openssl keystores (HSMs)
     return 0
 }
@@ -217,7 +217,7 @@ Available commands:
   certify		- Sign certificate request
   genkey		- Generate (end entity) key
   revoke		- Revoke certificate
-  initialize		- Initialize CA 
+  initialize		- Initialize CA
   login	                - Login to CA key and enter subshell
   backup		- Create backup of CA state
   check			- Display config file check sums
@@ -235,7 +235,7 @@ Usage: clca list <filter>
 
 Reads the certificate database and prints out a summary of all
 certificates matching the specified filter. <filter> may be
-either 'valid' or 'revoked'. 
+either 'valid' or 'revoked'.
 If <filter> is not specified all certificates are displayed.
 
 EOF
@@ -245,8 +245,8 @@ EOF
 Usage: clca issuecrl
 
 Issues a new CRL with default validity. The resulting CRL will
-be stored as $CRLDIR/YYYYMMDDHHMMSS.crl. 
-In addition a symlink to this file will be created, making it 
+be stored as $CRLDIR/YYYYMMDDHHMMSS.crl.
+In addition a symlink to this file will be created, making it
 possible to refer to the latest CRL as $CRLDIR/ca.crl
 The CRL is written in PEM format and may be converted to DER
 using the command
@@ -293,10 +293,10 @@ Size of the RSA key to generate. Default: 2048.
 Additional options for algorithm 'ec':
 --curve CURVENAME
 Short name of the EC curve. Default: prime256v1
-Refer to 
-openssl ecparam -list_curves 
+Refer to
+openssl ecparam -list_curves
 for a full list of the possible parameters.
- 
+
 EOF
 		;;
 	certify)
@@ -304,9 +304,9 @@ EOF
 Usage: clca certify --profile <name> [--startdate DATESPEC] [--enddate DATESPEC] [--days DAYS] [--reqformat P10|SSCERT|KEY] [--subject <subject>] [--san TYPE:SAN] [--batch] <request file>
 
 Signs a PKCS#10 certificate request (DER/PEM format is automatically
-detected). Certificate extensions and validity are determined by 
+detected). Certificate extensions and validity are determined by
 settings in openssl.cnf.
-The certificate Subject DN from the request data will be used verbatim 
+The certificate Subject DN from the request data will be used verbatim
 in the certification process unless explicitly overridden via --subject.
 
 When signing certificate requests it is possible to add any number of
@@ -315,14 +315,14 @@ The argument following --san is TYPE:SAN.
 TYPE must be one of the following: email, DNS, dirName, URI, IP, otherName.
 SAN is the respective value. See below for examples.
 
-The certificate profile to use for signing the certificate must be 
+The certificate profile to use for signing the certificate must be
 specified via --profile <name>. The specified argument corresponds to
 a section in the openssl.cnf file.
 If no --profile is specified the script prints the list of certificate
 profiles available for the certify command and exits.
 
-(NOTE: In order to qualify as a valid --profile the openssl.cnf file 
-section must include x509_extensions and must not include crl_extensions 
+(NOTE: In order to qualify as a valid --profile the openssl.cnf file
+section must include x509_extensions and must not include crl_extensions
 nor a distinguished_name.)
 
 If --reqformat SSCERT is specified then the input file should be
@@ -333,13 +333,13 @@ If --reqformat KEY is specified the specified request file must be a PEM
 formatted private key.
 If the key is encrypted, the passphrase must be set as environment
 variable PASSPHRASE when calling the certify command.
-A temporary request file is generated from the specified key file 
+A temporary request file is generated from the specified key file
 and a certificate is issued for the temporary request.
 The request/certificate --subject option is mandatory in this mode.
 
 After certification is performed the new certificate is copied to
-the directory $CERTDIR. 
-The certificate database is updated and a copy of the certificate 
+the directory $CERTDIR.
+The certificate database is updated and a copy of the certificate
 is written to the file 'newcert.pem' in the current directory.
 
 If --startdate or --enddate are specified, these dates are used for
@@ -358,7 +358,7 @@ If --batch is specified the underlying openssl commmand will be called
 in batch mode (useful for calling in shell scripts).
 
 Example:
-clca certify --profile endentity 
+clca certify --profile endentity
   --subject "/DC=org/DC=openxpki/O=OpenXPKI/CN=example.openxpki.org" \\
   --san DNS:foo.example.com --san DNS:bar.example.com --san IP:10.0.0.1 \\
   --san "otherName:1.3.6.1.4.1.311.20.2.3;UTF8:test@kerberos-domain.internal" foo.csr
@@ -372,13 +372,13 @@ Usage: clca revoke [--reason <reason>] [--compromisetime TIME] <serial number|ce
 
 Revokes the specified certificate. The certificate can be specified
 implicitly (as the PEM encoded X.509 certificate file name) or
-as its serial number. 
-NOTE that referencing the certificate by serial number is not possible 
-if RANDOMIZE_SERIAL is set, in this case the certificate must be 
+as its serial number.
+NOTE that referencing the certificate by serial number is not possible
+if RANDOMIZE_SERIAL is set, in this case the certificate must be
 specified via its file name.
 
-If the serial number is specified instead of a file name the script checks 
-if the certificate exists in the certificate database and that it is 
+If the serial number is specified instead of a file name the script checks
+if the certificate exists in the certificate database and that it is
 still valid. If the corresponding certificate exists in the
 certificate directory the certificate is revoked after asking
 the user for approval.
@@ -388,7 +388,7 @@ reason codes are
 unspecified, keyCompromise, CACompromise, affiliationChanged, superseded,
 cessationOfOperation
 
-If --compromisetime is specified, it denotes the point in zulu time the 
+If --compromisetime is specified, it denotes the point in zulu time the
 certificate was compromised. TIME must have the format YYYYMMDDHHMMSSZ.
 The Z character at the end of the time spec is mandatory.
 If --compromisetime is set, the --reason is set to keyCompromise unless
@@ -404,8 +404,8 @@ EOF
 Usage: clca initialize [--req <filename>] [--startdate DATESPEC] [--enddate DATESPEC]
 
 Initializes the CA database and creates either a self-signed certificate
-or a PKCS#10 certificate request. 
-NOTE: This purges all existing data about issued certificates and CRLs and 
+or a PKCS#10 certificate request.
+NOTE: This purges all existing data about issued certificates and CRLs and
 thus should be performed only once.
 
 If --req <filename> are specified as arguments, no self-signed
@@ -447,7 +447,7 @@ EOF
 	    $CAT <<EOF
 Usage: clca check
 
-Display cryptographic check sums for config and executable files. 
+Display cryptographic check sums for config and executable files.
 EOF
         ;;
 	login)
@@ -480,13 +480,19 @@ A DATESPEC is an absolute timestamp representing a point in time. Two different
 formats are supported:
 
 Truncated format ("traditional") format: YY[MM[DD[HH[MM]SS[Z]]]]]
+
+IMPORTANT: The truncated format is only supported for years up to and including
+the year 2049. In order to specify the year 2050 or later, the complete format
+must be used.
+
 The truncated format uses a two-digit year representation and optionally allows
 any number of two-digit date/time specification components up to seconds.
-It is possible to specify only portions of the date, starting from the 
-left-hand side and leaving out the lower tier date components, e. g. "YY" or 
+It is possible to specify only portions of the date, starting from the
+left-hand side and leaving out the lower tier date components, e. g. "YY" or
 "YYMMDD".
 The missing date elements are implicitly filled with the lowest sensible value
 (01 for months and days, 00 for hours, minutes and seconds).
+
 
 Complete format: YYYYMMDDHHMMSS[Z]
 If the specified timestamp is exactly 14 digits long it is assumed to contain
@@ -575,8 +581,8 @@ EOF
 }
 
 # arg: DATESPEC, format YY[MM[DD[HH[MM]SS[Z]]]]] or YYYYMMDDHHMMSS[Z]
-# It is possible to specify only portions of the date, 
-# starting from the left-hand side and leave out the 
+# It is possible to specify only portions of the date,
+# starting from the left-hand side and leave out the
 # lower tier date components, e. g. "YY" or "YYMMDD".
 # The function will add any missing date elements and
 # return a valid OpenSSL date with the full fomat YYMMDDHHMMSSZ
@@ -606,12 +612,16 @@ sanitize_openssl_date() {
         exit 1;
     }
 
-    if ($yy < 10 || ($yy > 50 && $yy < 100)) {
-        print STDERR "WARNING: Year 20$yy used in traditional date specification. Please double-check.\n";
+    if ($yy >= 50 && $yy < 100) {
+        print STDERR "ERROR: Year $yy used in traditional date specification. This would be interpreted as the year 19$yy.\n";
+        print STDERR "       Refusing to continue. Please specify the absolute date as YYYYMMDDHHMMSS\n";
+        exit 1;
     }
     if ($yy == 20) {
         print STDERR "WARNING: Year 2020 specified in traditional date spec. Please double-check.\n";
     }
+
+
     $mm = "01" unless defined $mm;
     $dd = "01" unless defined $dd;
     $hh = "00" unless defined $hh;
@@ -640,6 +650,34 @@ sanitize_openssl_date() {
         exit 1;
     }
 
+    # Determine the full year for validation purposes
+    my $full_year;
+    if ($yy >= 100) {
+        $full_year = sprintf ("%04d", $yy);  # YYYY format
+    } else {
+        # better safe than sorry
+        if ($yy < 50) {
+            $full_year = 2000 + $yy;
+        } else {
+            $full_year = 1900 + $yy;
+        }
+    }
+
+    # Days per month (non-leap year)
+    my @days_in_month = (0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31);
+
+    # Leap year check
+    if ($mm == 2) {
+        if (($full_year % 4 == 0 && $full_year % 100 != 0) || ($full_year % 400 == 0)) {
+            $days_in_month[2] = 29;
+        }
+    }
+
+    if ($dd < 1 || $dd > $days_in_month[$mm]) {
+        print STDERR "ERROR: Invalid day $dd for month $mm in year $full_year.\n";
+        exit 1;
+    }
+
     print $yy . $mm . $dd . $hh . $min . $ss . $z . "\n";
     ' "$1"
 }
@@ -656,7 +694,7 @@ genkey()
     KEYSIZE=${DEFAULT_RSA_KEYSIZE:-2048}
     CURVE=${DEFAULT_EC_CURVE:-prime256v1}
     PROTECT=default
-    
+
     while [ -n "$1" ] ; do
 	case "$1" in
 	    --keyfile)
@@ -733,7 +771,7 @@ genkey()
     esac
 
     mkdir -p $CAPRIVDIR
-    
+
     case "$ALGORITHM" in
 	rsa)
 	    $OPENSSL genrsa $OPENSSLOPT -out "$KEYFILE" $KEYSIZE
@@ -746,7 +784,7 @@ genkey()
 	    abort 1
 	    ;;
     esac
-    
+
     if [ $? != 0 ] ; then
 	echo "ERROR: key generation failed"
 	unset PASSPHRASE
@@ -764,11 +802,11 @@ certify()
 	showhelp certify
 	abort 1
     fi
-    
+
     SAN=()
 
     PROFILE_ARG_SPECIFIED=0
-    
+
     REQFORMAT="P10"
     while [ -n "$1" ] ; do
 	case "$1" in
@@ -835,7 +873,7 @@ certify()
 		;;
 	esac
     done
-    
+
     if [ -z "$PROFILE" ] ; then
 	echo "ERROR: --profile missing"
 	echo
@@ -853,7 +891,7 @@ certify()
 	echo
 	abort 1
     fi
-    
+
     if [ ${#SAN[@]} != 0 ] ; then
 	# SANs specified, need to create temporary config with SANs embedded
 
@@ -906,7 +944,7 @@ certify()
                     if (! defined $type || ($type !~ m{^(?:DNS|IP|email|otherName|URI/)$})) {
                         print STDERR "ERROR: invalid SAN type, use one of the following: DNS|IP|email|otherName|URI\n";
                         exit 1;
-                    }                  
+                    }
                     my $count = $sancount{$type}++ || 0;
                     print "$type.$count = $data\n";
                 }
@@ -937,7 +975,7 @@ certify()
 		echo "Converting DER encoded certificate request to PEM"
 		INFILE=`$MKTEMP /tmp/temp.XXXXXX`
 		topurge $INFILE
-		
+
 		$OPENSSL req -in $REQ -inform $INFORM -out $INFILE -outform pem
 		if [ "$?" != 0 ] ; then
 		    echo "Conversion failed."
@@ -959,7 +997,7 @@ certify()
 		echo "Converting DER encoded certificate to PEM"
 		INFILE=`$MKTEMP /tmp/temp.XXXXXX`
 		topurge $INFILE
-		
+
 		$OPENSSL x509 -in $REQ -inform $INFORM -out $INFILE -outform pem
 		if [ "$?" != 0 ] ; then
 		    echo "ERROR: Conversion failed."
@@ -975,15 +1013,15 @@ certify()
 		echo "ERROR: --subject is required for KEY request format"
 		abort 1
 	    fi
-	    
+
 	    if [ ! -e $REQ ]; then
 		echo "ERROR: pass pem encoded key as last argument."
 		abort 1
 	    fi
-		
+
 	    INFILE=`$MKTEMP /tmp/temp.XXXXXX`
 	    topurge $INFILE
-	    
+
 	    if [ -z "$PASSPHRASE" ] ; then
 		get_passphrase_cached
 		export PASSPHRASE
@@ -991,14 +1029,14 @@ certify()
 	    if [ -n "${PASSPHRASE}" ] ; then
 		OPENSSLOPT="-passin env:PASSPHRASE"
 	    fi
-	    
+
 	    $OPENSSL req -new $OPENSSLOPT -out $INFILE -outform pem -key "$REQ" $CONFIGARG
 	    if [ "$?" != 0 ] ; then
 		echo "ERROR: CSR creation failed."
-		abort 1		
+		abort 1
 	    fi
 	    unset PASSPHRASE
-	    
+
 	    REQUESTINPUT="-in $INFILE"
 	    echo "Request to certify:"
 	    $OPENSSL req -text -noout -in $INFILE
@@ -1008,7 +1046,7 @@ certify()
 	    abort 1
 	    ;;
     esac
-	
+
 
 
 
@@ -1036,7 +1074,7 @@ certify()
 	fi
 	VALIDITY="$VALIDITY -days $DAYS "
     fi
-    
+
 
     SERIAL=`$CAT $CADBDIR/serial`
     if [ -n "$SUBJECT" ] ; then SUBJECT="-subj '$SUBJECT'" ; fi
@@ -1044,7 +1082,7 @@ certify()
     if [ "$RANDOMIZE_SERIAL" == "1" ] ; then
 	OPENSSLOPT="-rand_serial"
     fi
-    
+
     get_passphrase_cached
     export PASSPHRASE
     if [ -n "${PASSPHRASE}" ] ; then
@@ -1056,7 +1094,7 @@ certify()
     if [ -n "$BATCH" ] ; then
 	OPENSSLOPT="$OPENSSLOPT -batch"
     fi
-    
+
     eval $HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -name $PROFILE $VALIDITY $SUBJECT -cert $CACERT -out newcert.pem -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
 
     if [ "$?" != 0 ] ; then
@@ -1064,7 +1102,7 @@ certify()
 	abort 1
     fi
     unset PASSPHRASE
-    
+
     if [ -r $CERTDIR/$SERIAL.pem ] ; then
 	echo "Wrote certificate to $CERTDIR/$SERIAL.pem"
     fi
@@ -1101,7 +1139,7 @@ revoke()
 		;;
 	esac
     done
-	    
+
     if [ "$ID" = "" ] ; then
 	showhelp revoke
 	abort 1
@@ -1129,16 +1167,16 @@ revoke()
     fi
 
     CERT_TO_REVOKE=""
-    
+
     if [ -e "$ID" ] ; then
 	# certificate file specified
 	CERT_TO_REVOKE="$ID"
-	
+
     else
 	# try to identify certificate by serial number
 
 	FOUND=$((`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$ID\>" | wc -l`))
-	
+
 	case $FOUND in
 	    0)
 		echo "No matching valid certificate found for serial number '$ID'"
@@ -1148,7 +1186,7 @@ revoke()
 		SERIAL=`$CUT -f1,4 $CADBDIR/index.txt | $EGREP -i "^V.*\<$ID\>" | $CUT -f2`
 		if [ -r $CERTDIR/$SERIAL.pem ] ; then
 		    echo "Revoking certificate with serial number '$SERIAL':"
-		    
+
 		    $OPENSSL x509 -in $CERTDIR/$SERIAL.pem -subject -dates -serial -fingerprint -noout
 		    if [ "$?" != 0 ] ; then
 			echo "ERROR: Could not decode X.509 certificate $CERTDIR/$SERIAL.pem. Should not happen."
@@ -1156,7 +1194,7 @@ revoke()
 		    fi
 
 		    CERT_TO_REVOKE=$CERTDIR/$SERIAL.pem
-		    
+
 		else
 		    echo "ERROR: Certificate file $CERTDIR/$SERIAL.pem not found"
 		    abort 1
@@ -1173,20 +1211,20 @@ revoke()
 	echo "ERROR: could not read certificate file $CERT_TO_REVOKE"
 	abort 1
     fi
-      
+
 
     if [ "$ENGINE" = "openssl" ] ; then
 	KEYARG="-keyfile $CAPRIVDIR/$ROOTKEYNAME"
     else
 	KEYARG="-engine $ENGINE -keyform engine -keyfile \"$ROOTKEYNAME\""
     fi
-    
+
     get_passphrase_cached
     export PASSPHRASE
     if [ -n "${PASSPHRASE}" ] ; then
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
-    
+
     if [ -n "$COMPROMISETIME" ] ; then
 	if [ "$REASON" = "CACompromise" ] ; then
 	    OPENSSLOPT="$OPENSSLOPT -crl_CA_compromise $COMPROMISETIME"
@@ -1196,15 +1234,15 @@ revoke()
     else
 	OPENSSLOPT="$OPENSSLOPT -crl_reason $REASON"
     fi
-    
+
     eval $HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -revoke $CERT_TO_REVOKE $CONFIGARG
-    
+
     if [ $? != 0 ] ; then
 	echo "ERROR: Could not revoke certificate."
 	abort 1
     fi
     unset PASSPHRASE
-		    
+
     echo "INFO: It is recommended to issue a CRL after revoking a certificate."
 }
 
@@ -1232,7 +1270,7 @@ list()
 		;;
 	esac
     done
-    
+
     case "$FILTER" in
 	V)
 	    echo "Filter: Only valid certificates"
@@ -1244,7 +1282,7 @@ list()
 	    echo "Filter: All certificates"
 	    ;;
     esac
-	
+
 
     $CUT -f1,4 <$CADBDIR/index.txt | ( while read status serial ; do
 	    if [ "$FILTER" = "" -o "$FILTER" = "$status" ] ; then
@@ -1292,7 +1330,7 @@ issue_crl()
     done
 
     echo "Issuing new CRL..."
-    
+
     # determine filename
     TIMESTAMP=`$DATE +%Y%m%d%H%M%S`
     CRLFILE=$CRLDIR/$TIMESTAMP.crl
@@ -1311,7 +1349,7 @@ issue_crl()
     if [ -n "${PASSPHRASE}" ] ; then
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
-    
+
     eval $HSM_PRELOAD $OPENSSL ca -gencrl $KEYARG $OPENSSLOPT -out $CRLFILE $CONFIGARG
     if [ $? != 0 ] ; then
 	echo "ERROR: Could not issue CRL."
@@ -1319,11 +1357,11 @@ issue_crl()
 	abort 1
     fi
     unset PASSPHRASE
-    
+
     ( cd $CRLDIR && $LN -sf `$BASENAME $CRLFILE` `$BASENAME $LATEST` )
-    
+
     $OPENSSL crl -in $CRLFILE -text -noout
-    
+
     echo
     echo "* CRL $CRLFILE created."
     echo "NOTE: Latest CRL is also available as $LATEST."
@@ -1421,7 +1459,7 @@ initialize()
 		echo "$NFAST_HOME/bin/generatekey2 hwcrhk NAME=$ROOTKEYNAME"
 		;;
 	esac
-	
+
 	abort 1;
     fi
 
@@ -1430,7 +1468,7 @@ initialize()
 	    echo "* ERROR: $DIR already exists, bailing out."
 	    echo "Hint: If you wish to clear this CA and start with a new one remove the following files and directories:"
 	    if [ "$ENGINE" = "openssl" ] ; then
-		
+
 		echo "# rm -rf $CAPRIVDIR # only if you wish to erase the private key"
 	    fi
 	    echo "rm -rf $CADBDIR"
@@ -1441,7 +1479,7 @@ initialize()
     done
 
     echo "Creating a new CA..."
-    
+
     echo -e "* Adjusting $CNF file"
     $MKDIR -p $CADBDIR
     $CP $CNF $CNF.bak
@@ -1453,14 +1491,14 @@ initialize()
 	echo "* Creating directory $i"
 	$MKDIR -p $i || abort 1
     done
-    
+
     if [ "$ENGINE" = "openssl" ] ; then
 	echo "* Creating directory $CAPRIVDIR"
 	$MKDIR -m 700 -p $CAPRIVDIR || abort 1
     fi
-    
+
     echo "* Initializing CA"
-    
+
     if [ ! -s $CAPRIVDIR/.rand ] ; then
 	echo "Initialize random seed"
 	$MKDIR -p $CAPRIVDIR
@@ -1471,7 +1509,7 @@ initialize()
 	    abort 1
 	fi
     fi
-    
+
     echo "* Initializing certificate index file"
     $TOUCH $CADBDIR/index.txt
     echo "* Initializing serial numbers"
@@ -1483,14 +1521,14 @@ initialize()
 01
 EOF
 
-    
-    
+
+
     if [ "$ENGINE" = "openssl" ] ; then
 	KEYARG="-key $CAPRIVDIR/$ROOTKEYNAME"
     else
 	KEYARG="-engine $ENGINE -keyform engine -key \"$ROOTKEYNAME\" "
     fi
-    
+
     if [ -z "$CAREQ" ]; then
 	# create self-signed certificate
 	X509ARG=-x509
@@ -1512,7 +1550,7 @@ EOF
 	    # this temporary certificate should not exist at all, so limit
 	    # its validity to one day.
 	    CA_VALIDITY=1
-	    
+
 	    echo "* Absolute validity requested, creating dummy certificate to work around an"
 	    echo "  OpenSSL limitation. (You may have to enter the private key PIN twice due"
 	    echo "  to this problem.)"
@@ -1522,10 +1560,10 @@ EOF
 	echo "* Generating self-signed CA root certificate with a validity of $CA_VALIDITY days"
 	OUT="$CAREQ"
     fi
-    
+
     # oliwel - overload environment to get a clean request
     export CN="Root CA"
-    
+
     get_passphrase_cached
     export PASSPHRASE
     if [ -n "${PASSPHRASE}" ] ; then
@@ -1544,9 +1582,9 @@ EOF
     fi
     unset PASSPHRASE
 
-    # self-signed-certificate-with-absolute-validity workaround continued 
+    # self-signed-certificate-with-absolute-validity workaround continued
     if [ -n "$HAVE_VALIDITY" ] ; then
-	# 
+	#
 	if [ -n "$STARTDATE" ] ; then
 	    VALIDITY="-startdate $STARTDATE "
 	fi
@@ -1558,13 +1596,13 @@ EOF
  	# a dummy ca certificate, validity 1 day, subject as entered
  	SAVED_CACERT="$CACERT"
  	CACERT="$OUT"
-	
+
 	# force serial number of prototype certificate
  	SAVED_SERIAL=`$CAT $CADBDIR/serial`
 	SERIAL=`$OPENSSL x509 -noout -serial -in $OUT`
 	SERIAL="${SERIAL#*=}"
  	echo "$SERIAL" >$CADBDIR/serial
-	
+
 	# force Root extensions
 	PROFILE="CA_default"
  	certify $VALIDITY --reqformat SSCERT $OUT
@@ -1591,7 +1629,7 @@ EOF
 		echo "Could not convert certificate to DER (should not happen)."
 	    fi
 	    echo "* CA root certificate contents:"
-	    $OPENSSL x509 -in $CACERT -noout -text 
+	    $OPENSSL x509 -in $CACERT -noout -text
     else
 	echo "* Certify PKCS#10 $CAREQ and place resulting CA certificate in $CACERT"
     fi
@@ -1600,7 +1638,7 @@ EOF
 
 
 ###########################################################################
-check() 
+check()
 {
     while [ -n "$1" ] ; do
 	case "$1" in
@@ -1638,7 +1676,7 @@ check()
 }
 
 
-backup() 
+backup()
 {
     FILENAME=""
     while [ -n "$1" ] ; do
@@ -1655,7 +1693,7 @@ backup()
     done
 
     echo "Backup CA configuration and database"
-    
+
     if [ "$FILENAME" = "" ] ; then
 	TIMESTAMP=`$DATE +%Y%m%d%H%M%S`
 	FILENAME="$TIMESTAMP-clca-backup.tar.gz"
@@ -1665,12 +1703,12 @@ backup()
 	abort 1
     fi
     echo "Creating backup archive file $FILENAME"
-    
+
     ( cd $CA_HOME && $TAR -c -z --exclude $FILENAME -f - . ) >$FILENAME
 }
 
 
-# undocumented feature - modify openssl.cnf to reflect current 
+# undocumented feature - modify openssl.cnf to reflect current
 # path settings
 modifycnf()
 {
@@ -1679,7 +1717,7 @@ modifycnf()
 }
 
 get_certificate_profiles() {
-    # this inline script iterates through the OpenSSL configuration and 
+    # this inline script iterates through the OpenSSL configuration and
     # extracts all sections which satisfy the following conditions:
     # - contained in a regular OpenSSL section: [ Foo ]
     # - section includes x509_extensions
@@ -1696,16 +1734,16 @@ get_certificate_profiles() {
         }
         chomp;
         next if (/^\s*#/);
-        if (/\[\s*(.*?)\s*\]/) { 
+        if (/\[\s*(.*?)\s*\]/) {
             $section = $1
         }
-        if (/x509_extensions/) { 
+        if (/x509_extensions/) {
             $has_x509_extensions = 1
         }
-        if (/crl_extensions/) { 
+        if (/crl_extensions/) {
             $has_crl_extensions = 1
         }
-        if (/distinguished_name/) { 
+        if (/distinguished_name/) {
             $has_dn = 1
         }
         if ($lastsection ne $section) {
@@ -1733,7 +1771,7 @@ get_certificate_profiles() {
 if [ -z "$CLCA_SESSION_KEY" ] ; then
     # only set it if not passed in from the environment
     # if we are called from a "login" sub shell we get the
-    # session key of the parent for decryption of the 
+    # session key of the parent for decryption of the
     # encrypted passphrase
     CLCA_SESSION_KEY=`$OPENSSL rand -base64 40`
 fi
