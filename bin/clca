@@ -301,7 +301,7 @@ EOF
 		;;
 	certify)
 	    $CAT <<EOF
-Usage: clca certify --profile <name> [--startdate DATESPEC] [--enddate DATESPEC] [--days DAYS] [--reqformat P10|SSCERT|KEY] [--subject <subject>] [--san TYPE:SAN] [--batch] <request file>
+Usage: clca certify --profile <name> [--startdate DATESPEC] [--enddate DATESPEC] [--days DAYS] [--reqformat P10|SSCERT|KEY] [--subject <subject>] [--san TYPE:SAN] [--out OUTFILE] [--batch] <request file>
 
 Signs a PKCS#10 certificate request (DER/PEM format is automatically
 detected). Certificate extensions and validity are determined by
@@ -332,15 +332,17 @@ a self-signed certificate that will be used instead of a PKCS#10 request
 If --reqformat KEY is specified the specified request file must be a PEM
 formatted private key.
 If the key is encrypted, the passphrase must be set as environment
-variable PASSPHRASE when calling the certify command.
+<variable PASSPHRASE when calling the certify command.
 A temporary request file is generated from the specified key file
 and a certificate is issued for the temporary request.
 The request/certificate --subject option is mandatory in this mode.
 
+If --out OUTFILE is specified then the issued certificate will be written
+to the specified file name. If --out is not specified, the certificate will
+be written to the file newcert.pem.
+
 After certification is performed the new certificate is copied to
-the directory $CERTDIR.
-The certificate database is updated and a copy of the certificate
-is written to the file 'newcert.pem' in the current directory.
+the directory $CERTDIR and the certificate database is updated.
 
 If --startdate or --enddate are specified, these dates are used for
 the certificate's lifetime. The dates must be specified in the DATESPEC
@@ -806,6 +808,7 @@ certify()
     SAN=()
 
     PROFILE_ARG_SPECIFIED=0
+    OUTFILE=newcert.pem
 
     REQFORMAT="P10"
     while [ -n "$1" ] ; do
@@ -845,6 +848,12 @@ certify()
 		# optional request format
 		# possible values: "SSCERT"
 		REQFORMAT="$2"
+		shift
+		shift
+		;;
+	    --out)
+		# optional output filename for generated cert, default: newcert.pem
+		OUTFILE="$2"
 		shift
 		shift
 		;;
@@ -1095,7 +1104,7 @@ certify()
 	OPENSSLOPT="$OPENSSLOPT -batch"
     fi
 
-    eval $HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -name $PROFILE $VALIDITY $SUBJECT -cert $CACERT -out newcert.pem -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
+    eval $HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -name $PROFILE $VALIDITY $SUBJECT -cert $CACERT -out $OUTFILE -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
 
     if [ "$?" != 0 ] ; then
 	echo "ERROR: Certification failed."
@@ -1561,9 +1570,6 @@ EOF
 	OUT="$CAREQ"
     fi
 
-    # oliwel - overload environment to get a clean request
-    export CN="Root CA"
-
     get_passphrase_cached
     export PASSPHRASE
     if [ -n "${PASSPHRASE}" ] ; then
@@ -1608,16 +1614,16 @@ EOF
  	certify $VALIDITY --reqformat SSCERT $OUT
 	unset PROFILE
 
- 	CACERT="$SAVED_CACERT"
+	CACERT="$SAVED_CACERT"
 
 	# install ca certificate
- 	$MV newcert.pem $CACERT
+        $MV newcert.pem $CACERT
 
 	# restore previous serial number
  	echo "$SAVED_SERIAL" >$CADBDIR/serial
 
-	# clear cert db
-	$MV $CADBDIR/index.txt.old $CADBDIR/index.txt
+        # clear cert db
+        $MV $CADBDIR/index.txt.old $CADBDIR/index.txt
     fi
 
 
