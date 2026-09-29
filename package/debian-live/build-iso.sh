@@ -20,6 +20,38 @@ hook-post-build() {
     :
 }
 
+# error handling helpers for addons
+#
+# die MESSAGE
+#   abort the build, naming the addon currently being processed
+die() {
+    echo "ERROR: ${ADDON:+$ADDON: }$*" >&2
+    exit 1
+}
+
+# addon_strict
+#   call as the first command in a ( ... ) subshell: any failing command
+#   terminates the subshell and reports file, line and command
+addon_strict() {
+    set -eE
+    trap 'rc=$?; echo "ERROR: ${BASH_SOURCE[0]}:$LINENO: \"$BASH_COMMAND\" failed with exit code $rc" >&2' ERR
+}
+
+# addon_relax
+#   undo addon_strict (only needed if addon_strict was used outside a subshell)
+addon_relax() {
+    set +eE
+    trap - ERR
+}
+
+# addon_check DESCRIPTION
+#   call immediately after a ( ... ) subshell: aborts the build if it failed.
+#   NOTE: do not use "( ... ) || die", this disables set -e within the subshell
+addon_check() {
+    local rc=$?
+    [ $rc -eq 0 ] || die "$* failed (exit code $rc)"
+}
+
 [ -r "build-iso.rc" ] && . build-iso.rc
 [ -r "build-iso-local.rc" ] && . build-iso-local.rc
 
@@ -91,9 +123,11 @@ if [ -d "addons.d" ]; then
    for i in addons.d/*.sh; do
       if [ -r $i ]; then
          echo "* Addon: $i"
+         ADDON=$i
          . $i
       fi
    done
+   unset ADDON
 fi
 
 LB_OPTIONS="--iso-application clca-Live-CA-Environment \
@@ -110,7 +144,7 @@ APPEND_OPTIONS="`eval echo $APPEND_OPTIONS`"
 echo "bootappend options: $APPEND_OPTIONS"
 
 lb config $LB_OPTIONS --bootappend-live "$APPEND_OPTIONS" | tee build.log
-if [ $? != 0 ] ; then
+if [ ${PIPESTATUS[0]} != 0 ] ; then
 	echo "ERROR: lb config failed"
 	exit 1
 fi
@@ -133,7 +167,7 @@ fi
 
 echo "Building the ISO image (takes about 10 min with packages in cache)..."
 lb build 2>&1 | tee -a build.log
-if [ $? != 0 ] ; then
+if [ ${PIPESTATUS[0]} != 0 ] ; then
 	echo "ERROR: lb build failed"
 	exit 1
 fi
