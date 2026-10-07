@@ -58,6 +58,62 @@ hook_exit() {
    :
 }
 
+######################################################################
+# global hooks (not part of the CA configuration)
+#
+# Executables in $CLCA_HOOK_DIR/pre-command.d/ and post-command.d/ run in
+# name order for every command except help and login. Unlike hook_init and
+# hook_exit they do not depend on the CA instance, so tools that manage all
+# CA instances of a host (e.g. an audit trail) can attach to clca. As with
+# run-parts, only files whose names consist of letters, digits, '_' and '-'
+# are run.
+# Environment: CLCA_COMMAND, CLCA_VERSION, CA_HOME, and CLCA_EXIT_CODE for
+# post-command hooks. Arguments: the arguments of the clca command.
+# A pre-command hook that exits non-zero aborts the command with its exit
+# code. Post-command hooks also run when the command fails or is aborted;
+# they do not change the exit code of clca.
+
+CLCA_HOOK_DIR=${CLCA_HOOK_DIR:-/etc/clca/hooks.d}
+
+# run_global_hooks pre-command|post-command ARGS...
+run_global_hooks() {
+    local phase=$1
+    shift
+    [ -d "$CLCA_HOOK_DIR/$phase.d" ] || return 0
+    (
+	export CLCA_COMMAND CLCA_VERSION="$VERSION" CA_HOME
+	if [ "$phase" = post-command ] ; then
+	    export CLCA_EXIT_CODE
+	fi
+	for HOOK in "$CLCA_HOOK_DIR/$phase.d"/* ; do
+	    case "${HOOK##*/}" in
+		*[!A-Za-z0-9_-]*) continue ;;
+	    esac
+	    [ -f "$HOOK" ] && [ -x "$HOOK" ] || continue
+	    "$HOOK" "$@"
+	    RC=$?
+	    if [ $RC != 0 ] ; then
+		if [ "$phase" = pre-command ] ; then
+		    echo "ERROR: hook $HOOK refused the command (exit code $RC)" >&2
+		    exit $RC
+		fi
+		echo "WARNING: hook $HOOK failed (exit code $RC)" >&2
+	    fi
+	done
+	exit 0
+    )
+}
+
+# EXIT trap: CLCA_EXIT_CODE is the exit code of clca, or the return code of
+# the command function if clca itself ends normally
+run_post_command_hooks() {
+    CLCA_EXIT_CODE=$?
+    if [ "$CLCA_EXIT_CODE" = 0 ] && [ -n "$CLCA_COMMAND_RC" ] ; then
+	CLCA_EXIT_CODE=$CLCA_COMMAND_RC
+    fi
+    run_global_hooks post-command "${CLCA_HOOK_ARGS[@]}"
+}
+
 # default passphrase prompt
 # return 0 means that a passphrase has been echoed to stdout
 # return 1 means that no passphrase is to be used
@@ -1839,8 +1895,14 @@ case "$CMD" in
 	;;
 esac
 
+CLCA_COMMAND=${CMD#custom_}
+CLCA_HOOK_ARGS=("$@")
+run_global_hooks pre-command "$@" || abort $?
+trap run_post_command_hooks EXIT
+
 hook_init "$@"
 $CMD "$@"
+CLCA_COMMAND_RC=$?
 hook_exit "$@"
 
 cleanup
