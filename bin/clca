@@ -104,13 +104,9 @@ run_global_hooks() {
     )
 }
 
-# EXIT trap: CLCA_EXIT_CODE is the exit code of clca, or the return code of
-# the command function if clca itself ends normally
+# EXIT trap: CLCA_EXIT_CODE is the exit code of clca
 run_post_command_hooks() {
     CLCA_EXIT_CODE=$?
-    if [ "$CLCA_EXIT_CODE" = 0 ] && [ -n "$CLCA_COMMAND_RC" ] ; then
-	CLCA_EXIT_CODE=$CLCA_COMMAND_RC
-    fi
     run_global_hooks post-command "${CLCA_HOOK_ARGS[@]}"
 }
 
@@ -1906,3 +1902,4 @@ CLCA_COMMAND_RC=$?
 hook_exit "$@"
 
 cleanup
+exit $CLCA_COMMAND_RC
