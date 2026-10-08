@@ -118,6 +118,11 @@ mkdir -p $TARGETROOT
 # base packages
 PACKAGES="make vim less pandoc dosfstools python perl-doc cryptsetup"
 
+# Debian archive areas, addons may add e.g. non-free-firmware.
+# live-build does not pick firmware packages on its own (see lb config
+# below), addons list the firmware they need in PACKAGES.
+ARCHIVE_AREAS="main"
+
 echo "Installing addons..."
 if [ -d "addons.d" ]; then
    for i in addons.d/*.sh; do
@@ -133,7 +138,9 @@ fi
 LB_OPTIONS="--iso-application clca-Live-CA-Environment \
 --iso-publisher '$ORGANIZATION' \
 --iso-volume '$ORGANIZATION clca Live CA Environment' \
---distribution $DISTRIBUTION"
+--distribution $DISTRIBUTION \
+--firmware-chroot false \
+--firmware-binary false"
 
 [ -n "$ARCHITECTURE" ] && LB_OPTIONS="$LB_OPTIONS --architectures \"$ARCHITECTURE\""
 [ -n "$LINUX_FLAVOUR" ] && LB_OPTIONS="$LB_OPTIONS --linux-flavours \"$LINUX_FLAVOUR\""
@@ -143,7 +150,9 @@ echo "Generating initial configuration..."
 APPEND_OPTIONS="`eval echo $APPEND_OPTIONS`"
 echo "bootappend options: $APPEND_OPTIONS"
 
-lb config $LB_OPTIONS --bootappend-live "$APPEND_OPTIONS" | tee build.log
+echo "archive areas: $ARCHIVE_AREAS"
+
+lb config $LB_OPTIONS --archive-areas "$ARCHIVE_AREAS" --bootappend-live "$APPEND_OPTIONS" | tee build.log
 if [ ${PIPESTATUS[0]} != 0 ] ; then
 	echo "ERROR: lb config failed"
 	exit 1
