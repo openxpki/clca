@@ -400,7 +400,7 @@ in the certification process unless explicitly overridden via --subject.
 When signing certificate requests it is possible to add any number of
 Subject Alternative Names by specifying one or more --san options.
 The argument following --san is TYPE:SAN.
-TYPE must be one of the following: email, DNS, dirName, URI, IP, otherName.
+TYPE must be one of the following: email, DNS, URI, IP, otherName.
 SAN is the respective value. See below for examples.
 
 The certificate profile to use for signing the certificate must be
@@ -1038,7 +1038,7 @@ certify()
                 my %sancount;
                 foreach my $entry (@RAWSANS) {
                     my ($type, $data) = ($entry =~ /^(.*?):(.*)/);
-                    if (! defined $type || ($type !~ m{^(?:DNS|IP|email|otherName|URI/)$})) {
+                    if (! defined $type || ($type !~ m{^(?:DNS|IP|email|otherName|URI)$})) {
                         print STDERR "ERROR: invalid SAN type, use one of the following: DNS|IP|email|otherName|URI\n";
                         exit 1;
                     }
