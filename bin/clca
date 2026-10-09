@@ -644,7 +644,7 @@ modify_cnf()
 \$cacrl="$CRLDIR/ca.crl";
 \$certdir="$CERTDIR";
 
-foreach (qw (\$cadb \$cacert \$serial \$crldir \$cacrl \$certdir)) {
+foreach (qw (\$cadb \$cacert \$serial \$crlnumber \$crldir \$cacrl \$certdir)) {
     eval "\$_ =~ s#\$cahome#\\\\\\\$dir#g";
 }
 
