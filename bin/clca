@@ -376,7 +376,8 @@ Public key algorithm to use. Default: 'rsa'
 
 Additional options for algorithm 'rsa':
 --keysize BITS
-Size of the RSA key to generate. Default: 2048.
+Size of the RSA key to generate. Default: DEFAULT_RSA_KEYSIZE in
+clca.cfg, else 2048.
 
 Additional options for algorithm 'ec':
 --curve CURVENAME
@@ -463,9 +464,6 @@ Usage: clca revoke [--reason <reason>] [--compromisetime TIME] <serial number|ce
 Revokes the specified certificate. The certificate can be specified
 implicitly (as the PEM encoded X.509 certificate file name) or
 as its serial number.
-NOTE that referencing the certificate by serial number is not possible
-if RANDOMIZE_SERIAL is set, in this case the certificate must be
-specified via its file name.
 
 If the serial number is specified instead of a file name the script checks
 if the certificate exists in the certificate database and that it is
@@ -1638,7 +1636,7 @@ EOF
 	fi
     else
 	# create certificate request only
-	echo "* Generating self-signed CA root certificate with a validity of $CA_VALIDITY days"
+	echo "* Generating CA certificate request $CAREQ"
 	OUT="$CAREQ"
     fi
 
