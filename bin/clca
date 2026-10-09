@@ -13,6 +13,10 @@
 
 # Installation directory - change this to reflect your setup
 CA_HOME="$PWD"
+
+# prepare list of openssl providers (may be empty)
+declare -a OPENSSL_PROVIDERS
+
 CFG=$CA_HOME/etc/clca.cfg
 
 # common commands - change settings to suit your system
@@ -156,7 +160,7 @@ get_passphrase_cached() {
 	done
 
 	export CLCA_SESSION_KEY
-	ENCRYPTED_PASSPHRASE=`echo "$CLEARTEXT_PASSPHRASE" | $OPENSSL enc -aes256 -a -e -pbkdf2 -pass env:CLCA_SESSION_KEY`
+	ENCRYPTED_PASSPHRASE=`echo "$CLEARTEXT_PASSPHRASE" | $OPENSSL enc $OPENSSL_PROVIDER_OPTS -aes256 -a -e -pbkdf2 -pass env:CLCA_SESSION_KEY`
 	if [ "$?" != 0 ] ; then
 	    echo "ERROR: could not encrypt passphrase"
 	    abort 1
@@ -168,7 +172,7 @@ get_passphrase_cached() {
     else
 	# passphrase has been set, decrypt and return
 	export CLCA_SESSION_KEY
-	PASSPHRASE=`echo "$ENCRYPTED_PASSPHRASE" | $OPENSSL enc -aes256 -a -d -pbkdf2 -pass env:CLCA_SESSION_KEY`
+	PASSPHRASE=`echo "$ENCRYPTED_PASSPHRASE" | $OPENSSL enc $OPENSSL_PROVIDER_OPTS -aes256 -a -d -pbkdf2 -pass env:CLCA_SESSION_KEY`
 	if [ "$?" != 0 ] ; then
 	    echo "ERROR: could not decrypt passphrase"
 	    abort 1
@@ -187,7 +191,7 @@ verify_passphrase() {
 	fi
 	# try to login to software private key
 	export TMPPASS="$1"
-	$OPENSSL pkey -in $CAPRIVDIR/$ROOTKEYNAME -passin env:TMPPASS >/dev/null 2>&1
+	$OPENSSL pkey $OPENSSL_PROVIDER_OPTS -in $CAPRIVDIR/$ROOTKEYNAME -passin env:TMPPASS >/dev/null 2>&1
 	if [ "$?" = "0" ] ; then
 	    unset TMPPASS
 	    return 0
@@ -246,7 +250,10 @@ if [ "$ENGINE" = "openssl" -a "$HSM_PRELOAD" != "" ] ; then
     echo "NOTE: HSM_PRELOAD should not be necessary for engine 'openssl'"
 fi
 
-
+OPENSSL_PROVIDER_OPTS=""
+for entry in "${OPENSSL_PROVIDERS[@]}" ; do
+    OPENSSL_PROVIDER_OPTS="$OPENSSL_PROVIDER_OPTS -provider $entry"
+done
 
 ######################################################################
 
@@ -1037,7 +1044,7 @@ certify()
 		INFILE=`$MKTEMP /tmp/temp.XXXXXX`
 		topurge $INFILE
 
-		$OPENSSL req -in $REQ -inform $INFORM -out $INFILE -outform pem
+		$OPENSSL req $OPENSSL_PROVIDER_OPTS -in $REQ -inform $INFORM -out $INFILE -outform pem
 		if [ "$?" != 0 ] ; then
 		    echo "Conversion failed."
 		    abort 1
@@ -1059,7 +1066,7 @@ certify()
 		INFILE=`$MKTEMP /tmp/temp.XXXXXX`
 		topurge $INFILE
 
-		$OPENSSL x509 -in $REQ -inform $INFORM -out $INFILE -outform pem
+		$OPENSSL x509 $OPENSSL_PROVIDER_OPTS -in $REQ -inform $INFORM -out $INFILE -outform pem
 		if [ "$?" != 0 ] ; then
 		    echo "ERROR: Conversion failed."
 		    abort 1
@@ -1091,7 +1098,7 @@ certify()
 		OPENSSLOPT="-passin env:PASSPHRASE"
 	    fi
 
-	    $OPENSSL req -new $OPENSSLOPT -out $INFILE -outform pem -key "$REQ" $CONFIGARG
+	    $OPENSSL req $OPENSSL_PROVIDER_OPTS -new $OPENSSLOPT -out $INFILE -outform pem -key "$REQ" $CONFIGARG
 	    if [ "$?" != 0 ] ; then
 		echo "ERROR: CSR creation failed."
 		abort 1
@@ -1156,7 +1163,7 @@ certify()
 	OPENSSLOPT="$OPENSSLOPT -batch"
     fi
 
-    eval $HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -name $PROFILE $VALIDITY $SUBJECT -cert $CACERT -out $OUTFILE -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
+    eval $HSM_PRELOAD $OPENSSL ca $OPENSSL_PROVIDER_OPTS $KEYARG $OPENSSLOPT -name $PROFILE $VALIDITY $SUBJECT -cert $CACERT -out $OUTFILE -outdir $CERTDIR $CONFIGARG $REQUESTINPUT
 
     if [ "$?" != 0 ] ; then
 	echo "ERROR: Certification failed."
@@ -1248,7 +1255,7 @@ revoke()
 		if [ -r $CERTDIR/$SERIAL.pem ] ; then
 		    echo "Revoking certificate with serial number '$SERIAL':"
 
-		    $OPENSSL x509 -in $CERTDIR/$SERIAL.pem -subject -dates -serial -fingerprint -noout
+		    $OPENSSL x509 $OPENSSL_PROVIDER_OPTS -in $CERTDIR/$SERIAL.pem -subject -dates -serial -fingerprint -noout
 		    if [ "$?" != 0 ] ; then
 			echo "ERROR: Could not decode X.509 certificate $CERTDIR/$SERIAL.pem. Should not happen."
 			abort 1
@@ -1296,7 +1303,7 @@ revoke()
 	OPENSSLOPT="$OPENSSLOPT -crl_reason $REASON"
     fi
 
-    eval $HSM_PRELOAD $OPENSSL ca $KEYARG $OPENSSLOPT -revoke $CERT_TO_REVOKE $CONFIGARG
+    eval $HSM_PRELOAD $OPENSSL ca $OPENSSL_PROVIDER_OPTS $KEYARG $OPENSSLOPT -revoke $CERT_TO_REVOKE $CONFIGARG
 
     if [ $? != 0 ] ; then
 	echo "ERROR: Could not revoke certificate."
@@ -1363,7 +1370,7 @@ list()
 
 		echo "$PSTATUS Certificate $CERTFILE"
 		if [ -r "$CERTFILE" ] ; then
-		    $OPENSSL x509 -in $CERTFILE -subject -dates -serial -fingerprint -noout
+		    $OPENSSL x509 $OPENSSL_PROVIDER_OPTS -in $CERTFILE -subject -dates -serial -fingerprint -noout
 		    echo
 		else
 		    echo "WARNING: Certificate $CERTFILE does not exist"
@@ -1411,7 +1418,7 @@ issue_crl()
 	OPENSSLOPT="-passin env:PASSPHRASE"
     fi
 
-    eval $HSM_PRELOAD $OPENSSL ca -gencrl $KEYARG $OPENSSLOPT -out $CRLFILE $CONFIGARG
+    eval $HSM_PRELOAD $OPENSSL ca $OPENSSL_PROVIDER_OPTS -gencrl $KEYARG $OPENSSLOPT -out $CRLFILE $CONFIGARG
     if [ $? != 0 ] ; then
 	echo "ERROR: Could not issue CRL."
 	$RM -f $CRLFILE
@@ -1421,7 +1428,7 @@ issue_crl()
 
     ( cd $CRLDIR && $LN -sf `$BASENAME $CRLFILE` `$BASENAME $LATEST` )
 
-    $OPENSSL crl -in $CRLFILE -text -noout
+    $OPENSSL crl $OPENSSL_PROVIDER_OPTS -in $CRLFILE -text -noout
 
     echo
     echo "* CRL $CRLFILE created."
@@ -1575,7 +1582,7 @@ initialize()
     $TOUCH $CADBDIR/index.txt
     echo "* Initializing serial numbers"
 
-    $OPENSSL rand -hex 20 > $CADBDIR/serial
+    $OPENSSL rand $OPENSSL_PROVIDER_OPTS -hex 20 > $CADBDIR/serial
 
     echo "* Initializing CRL index"
     $CAT > $CADBDIR/crlnumber.txt <<EOF
@@ -1632,7 +1639,7 @@ EOF
 	OPENSSLOPT="$OPENSSLOPT -days $CA_VALIDITY"
     fi
 
-    eval $HSM_PRELOAD $OPENSSL req $OPENSSLOPT -new $X509ARG $KEYARG -out $OUT $CONFIGARG
+    eval $HSM_PRELOAD $OPENSSL req $OPENSSL_PROVIDER_OPTS $OPENSSLOPT -new $X509ARG $KEYARG -out $OUT $CONFIGARG
 
     if [ $? != 0 ] ; then
 	echo "ERROR: Something went wrong, could not create $OUT."
@@ -1657,7 +1664,7 @@ EOF
 
 	# force serial number of prototype certificate
  	SAVED_SERIAL=`$CAT $CADBDIR/serial`
-	SERIAL=`$OPENSSL x509 -noout -serial -in $OUT`
+	SERIAL=`$OPENSSL x509 $OPENSSL_PROVIDER_OPTS -noout -serial -in $OUT`
 	SERIAL="${SERIAL#*=}"
  	echo "$SERIAL" >$CADBDIR/serial
 
@@ -1682,12 +1689,12 @@ EOF
     # final step for self-signed certificates
     if [ -z "$CAREQ" ]; then
 	# convert cacert to der
-	    $OPENSSL x509 -in $CACERT -inform pem -out $CADBDIR/`$BASENAME $CACERT .pem`.der -outform der
+	    $OPENSSL x509 $OPENSSL_PROVIDER_OPTS -in $CACERT -inform pem -out $CADBDIR/`$BASENAME $CACERT .pem`.der -outform der
 	    if [ $? != 0 ] ; then
 		echo "Could not convert certificate to DER (should not happen)."
 	    fi
 	    echo "* CA root certificate contents:"
-	    $OPENSSL x509 -in $CACERT -noout -text
+	    $OPENSSL x509 $OPENSSL_PROVIDER_OPTS -in $CACERT -noout -text
     else
 	echo "* Certify PKCS#10 $CAREQ and place resulting CA certificate in $CACERT"
     fi
@@ -1717,7 +1724,7 @@ check()
 
     echo "Check sums for config files:"
     for i in $0 $CFG $CNF ; do
-	$OPENSSL dgst -sha256 $i
+	$OPENSSL dgst $OPENSSL_PROVIDER_OPTS -sha256 $i
     done
 
     echo
@@ -1727,10 +1734,10 @@ check()
     if [ -n "$HSM_PRELOAD" ] ; then
 	CHECKLIST="$CHECKLIST HSM_PRELOAD"
     fi
-    ( $OPENSSL dgst -sha256 $0 ;
+    ( $OPENSSL dgst $OPENSSL_PROVIDER_OPTS -sha256 $0 ;
       for i in $CHECKLIST ; do
-          eval $OPENSSL dgst -sha256 \$$i
-      done ) | $CUT -d' ' -f2  | $OPENSSL dgst -sha256
+          eval $OPENSSL dgst $OPENSSL_PROVIDER_OPTS -sha256 \$$i
+      done ) | $CUT -d' ' -f2  | $OPENSSL dgst $OPENSSL_PROVIDER_OPTS -sha256
 }
 
 
