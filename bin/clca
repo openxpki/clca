@@ -118,7 +118,7 @@ run_post_command_hooks() {
 # return 0 means that a passphrase has been echoed to stdout
 # return 1 means that no passphrase is to be used
 get_passphrase() {
-    if [ "$ENGINE" = "openssl" ] ; then
+    if [ "$ENGINE" = "openssl" -o "$ENGINE" = "provider" ] ; then
         local TMP
         echo -n "Enter passphrase: " >&2
         read -s TMP
@@ -200,8 +200,38 @@ verify_passphrase() {
 	return 1
     fi
 
+    if [ "$ENGINE" = "provider" ] ; then
+	# try to load the private key through the providers (e. g. login
+	# to the token); -noout: the key need not be exportable
+	export TMPPASS="$1"
+	$OPENSSL pkey $OPENSSL_PROVIDER_OPTS -in "$ROOTKEYNAME" -noout -passin env:TMPPASS >/dev/null 2>&1
+	if [ "$?" = "0" ] ; then
+	    unset TMPPASS
+	    return 0
+	fi
+	unset TMPPASS
+	return 1
+    fi
+
     # assume login is successful with non-openssl keystores (HSMs)
     return 0
+}
+
+# echo the openssl arguments that select the CA private key (for eval)
+# arg 1: key option, "-key" for openssl req, "-keyfile" for openssl ca
+ca_key_args() {
+    case "$ENGINE" in
+	openssl)
+	    echo "$1 $CAPRIVDIR/$ROOTKEYNAME"
+	    ;;
+	provider)
+	    # ROOTKEYNAME is a URI or file name, loaded by OPENSSL_PROVIDERS
+	    echo "$1 \"$ROOTKEYNAME\""
+	    ;;
+	*)
+	    echo "-engine $ENGINE -keyform engine $1 \"$ROOTKEYNAME\""
+	    ;;
+    esac
 }
 
 if [ -r $CFG ] ; then
@@ -1118,13 +1148,9 @@ certify()
 
 
 
-    if [ "$ENGINE" = "openssl" ] ; then
-	KEYARG="-keyfile $CAPRIVDIR/$ROOTKEYNAME"
-    else
-	# the openssl ca command uses -keyfile instead of -key for the key attribute.
-	# and -key means something different here. seriously.
-	KEYARG="-engine $ENGINE -keyform engine -keyfile \"$ROOTKEYNAME\""
-    fi
+    # the openssl ca command uses -keyfile instead of -key for the key attribute.
+    # and -key means something different here. seriously.
+    KEYARG=$(ca_key_args -keyfile)
 
     if [ -n "$STARTDATE" ] ; then
 	VALIDITY="-startdate $STARTDATE "
@@ -1281,11 +1307,7 @@ revoke()
     fi
 
 
-    if [ "$ENGINE" = "openssl" ] ; then
-	KEYARG="-keyfile $CAPRIVDIR/$ROOTKEYNAME"
-    else
-	KEYARG="-engine $ENGINE -keyform engine -keyfile \"$ROOTKEYNAME\""
-    fi
+    KEYARG=$(ca_key_args -keyfile)
 
     get_passphrase_cached
     export PASSPHRASE
@@ -1404,13 +1426,7 @@ issue_crl()
     CRLFILE=$CRLDIR/$TIMESTAMP.crl
     LATEST=$CRLDIR/ca.crl
 
-    if [ "$ENGINE" = "openssl" ] ; then
-	KEYARG="-keyfile $CA_HOME/private/$ROOTKEYNAME"
-    else
-	# the openssl ca command uses -keyfile instead of -key for the key attribute.
-	# and -key means something different here. seriously.
-	KEYARG="-engine $ENGINE -keyform engine -keyfile \"$ROOTKEYNAME\""
-    fi
+    KEYARG=$(ca_key_args -keyfile)
 
     get_passphrase_cached
     export PASSPHRASE
@@ -1503,7 +1519,7 @@ initialize()
 		FOUND=1
 	    fi
 	    ;;
-	pkcs11)
+	pkcs11|provider)
 	    FOUND=1
 	    ;;
 	*)
@@ -1591,11 +1607,7 @@ EOF
 
 
 
-    if [ "$ENGINE" = "openssl" ] ; then
-	KEYARG="-key $CAPRIVDIR/$ROOTKEYNAME"
-    else
-	KEYARG="-engine $ENGINE -keyform engine -key \"$ROOTKEYNAME\" "
-    fi
+    KEYARG=$(ca_key_args -key)
 
     if [ -z "$CAREQ" ]; then
 	# create self-signed certificate
