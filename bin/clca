@@ -115,8 +115,11 @@ run_post_command_hooks() {
 }
 
 # default passphrase prompt
-# return 0 means that a passphrase has been echoed to stdout
-# return 1 means that no passphrase is to be used
+# return 0 and output: the passphrase
+# return 0 and no output: no passphrase is to be used (no -passin; the HSM or
+#   OpenSSL prompts itself, or the key needs none)
+# return 10 or higher: clca terminates silently with exit code (RC - 10)
+# any other return code: error
 get_passphrase() {
     if [ "$ENGINE" = "openssl" -o "$ENGINE" = "provider" ] ; then
         local TMP
@@ -143,10 +146,6 @@ get_passphrase_cached() {
 	    fi
 	    if [ $RC != 0 ] ; then
 		echo "ERROR: could not get passphrase"
-		abort 1
-	    fi
-	    if [ -z "CLEARTEXT_PASSPHRASE" ] ; then
-		echo "FATAL: Null passphrase"
 		abort 1
 	    fi
 
