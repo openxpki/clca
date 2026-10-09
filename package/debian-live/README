@@ -1,4 +1,5 @@
 # CLCA on Debian Live (Live Root CA)
+
 This directory contains the build environment for packaging CLCA
 and assorted tools in a bootable Debian Live CD.
 
@@ -75,5 +76,4 @@ If the user's (persistent) home directory contains an executable file
 
 If the user's (persistent) home directory contains the file .xrootimage.png
 it will be displayed on the background of the graphical environment.
-
 
