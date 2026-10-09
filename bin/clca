@@ -640,11 +640,12 @@ modify_cnf()
 \$cacert="$CACERT";
 \$serial="$CADBDIR/serial";
 \$crlnumber="$CADBDIR/crlnumber.txt";
+\$randfile="$CAPRIVDIR/.rand";
 \$crldir="$CRLDIR";
 \$cacrl="$CRLDIR/ca.crl";
 \$certdir="$CERTDIR";
 
-foreach (qw (\$cadb \$cacert \$serial \$crlnumber \$crldir \$cacrl \$certdir)) {
+foreach (qw (\$cadb \$cacert \$serial \$crlnumber \$randfile \$crldir \$cacrl \$certdir)) {
     eval "\$_ =~ s#\$cahome#\\\\\\\$dir#g";
 }
 
@@ -658,6 +659,7 @@ while (<>) {
     s/^(serial)\s*=.*/\$1 = \$serial/;
     s/^(crlnumber)\s*=.*/\$1 = \$crlnumber/;
     s/^(crl)\s*=.*/\$1 = \$cacrl/;
+    s/^(RANDFILE)\s*=.*/\$1 = \$randfile/;
     print;
 }
 EOF
@@ -1585,7 +1587,7 @@ initialize()
     if [ ! -s $CAPRIVDIR/.rand ] ; then
 	echo "Initialize random seed"
 	$MKDIR -p $CAPRIVDIR
-	$DD if=/dev/urandom of=$CA_HOME/private/.rand bs=1 count=1024
+	$DD if=/dev/urandom of=$CAPRIVDIR/.rand bs=1 count=1024
 	$CHMOD 600 $CAPRIVDIR/.rand
 	if [ "`$WC -c $CAPRIVDIR/.rand | awk '{print $1}'`" != "1024" ] ; then
 	    echo "ERROR: Could not read enough random data from /dev/random, rerun this script"
