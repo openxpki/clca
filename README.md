@@ -1,247 +1,230 @@
-# CLCA command line CA script
-Copyright (c) 2004 - 2026 Martin Bartosch, WhiteRabbitSecurity GmbH
+# clca - command line CA
 
-This software is distributed under the GNU General Public License - see the
-accompanying LICENSE file for more details.
+Copyright (c) 2004 - 2026 Martin Bartosch, White Rabbit Security GmbH
 
-## Introduction
-This is a collection of tools that allow for basic PKI 
-operations such as Sub CA certificate issuance (signing certificate 
-requests), certificate revocation and CRL issuance.
-The script was originally designed to be used for a Root CA, but may 
-also be used for lower level CAs or even end entity certificates as well.
+clca is distributed under the GNU General Public License, see `LICENSE`.
 
-CA private keys can be held either in encrypted files (encrypted either with
-a simple passphrase or using Shamir's Secret Sharing) or stored in an HSM.
+## Overview
 
-The script was successfully tested with 
-- Thales nCipher nShield HSM
-- Gemalto SafeNet Luna SA HSM
+clca is a command line Certificate Authority for offline CAs: a bash script
+around `openssl ca` that covers the life cycle of a CA. It creates the CA
+certificate (self-signed or as a request to a higher CA), signs certificate
+requests, revokes certificates, issues CRLs, and keeps the CA database. It was
+designed for Root CAs, but works for any offline CA.
 
-Please note that this script does not support concurrent use of 
-multiple sessions. Unpredictable behaviour must be expected if two 
-instances of the CA script are run concurrently.
+The repository contains three tools:
 
+- `bin/clca`: the CA itself.
+- `bin/secret`: Shamir's Secret Sharing. Splits the passphrase of a CA key into
+  *n* shares, of which any *k* are needed to use the key.
+- `bin/provision`: creates CA instance directories from templates (YAML and
+  Template Toolkit).
 
-## Quick start: CA creation
+CA private keys can be kept in passphrase protected files (optionally with the
+passphrase split by `secret`), or in an HSM through an OpenSSL engine or an
+OpenSSL 3 provider (for example PKCS#11).
 
-You can handle an arbitrary number of CA instances using this script.
+clca does not support concurrent use: never run two clca commands on the same
+CA at the same time.
 
-* For each CA create a new top level directory and change into this
-  directory. Within this directory create an 'etc' directory and copy
-  the contents of the sample etc directory from the CLCA distribution.
+## Requirements
 
-* Modify CA configuration `etc/clca.cfg` to reflect your needs. Set
-  ENGINE as required for HSM or software CA support.
+- Linux with bash and the GNU core utilities
+- OpenSSL (OpenSSL 3 for the provider support)
+- Perl for `secret` (uses the modules in `lib/`) and for `provision`
+  (Template Toolkit, YAML)
 
-* Modify `etc/openssl.cnf` according to your CA policy and certificate
-  profile (see "Configuration")
+## Installation
 
-* Create root key (see "Root key generation")
+clca needs no installation: run `bin/clca` from the repository, or copy `bin/`
+and `lib/` to a directory of your choice (for example `/usr/local`) and put
+`bin` into your `PATH`.
 
-* Create self-signed CA certificate    OR
-* Create CA certificate request, export it to higher level CA and import
-  the certified CA certificate
+## Quick start: a Root CA with a software key
 
+Every CA is a directory (a "CA instance") with its own configuration in `etc/`.
+clca always works on the CA instance in the current directory.
 
+```sh
+mkdir rootca
+cd rootca
+mkdir etc
+cp /path/to/clca/etc/clca.cfg /path/to/clca/etc/openssl.cnf etc/
+```
 
+Adapt the configuration:
 
-## Root key generation
+- `etc/clca.cfg`: key storage (`ENGINE`, `ROOTKEYNAME`), defaults for new keys,
+  CA validity (see "Configuration").
+- `etc/openssl.cnf`: the CA's distinguished name (section `[ root_dn ]`), the
+  extensions of the CA certificate (`[ root_ext ]`), of CRLs and of the
+  certificates the CA issues (certificate profiles, see below).
 
-Only required for nCipher HSM support:
-- Install nCipher module and software.
-- Create a Security World
-- Create an administrator card set
-- Create an operator card set that protects your root key
-- Create a root key using `generatekey2 hwcrhk`
+Create the CA key. `genkey` asks for the new passphrase and writes
+`private/cakey.pem` (RSA 3072 bit by default, see `DEFAULT_*` in `clca.cfg`):
 
-Only required for Gemalto SafeNet Luna SA HSM support:
-- Install HSM drivers
-- Establish trust link to Luna SA HSM
-- Obtain Gamalto SafeNet support document DOW4073 (or newer document containing the OpenSSL 
-  gem engine)
-- Install OpenSSL Engine and sautil command line tool
+```sh
+clca genkey
+```
 
+Create the CA: a self-signed certificate valid from 2026-10-09 to 2036-10-09
+(dates in UTC, see "Dates"):
 
-Only required for software CA support with simple passphrase:
-- create a `private` directory in `$CA_HOME`
-- adapt the RSA key name in `clca.cfg`
-- run `openssl genrsa -aes256 -out $CA_HOME/private/<keyname>`
+```sh
+clca initialize --startdate 261009 --enddate 361009
+```
 
-See [README.keyceremony-shared-interactive.md]() for an example using Secret Sharing.
+For a Sub CA, create a request instead and have it certified by the higher CA:
+
+```sh
+clca initialize --req subca.csr
+```
+
+Then issue the first CRL:
+
+```sh
+clca issuecrl
+```
+
+The CRL is written to `crl/YYYYMMDDHHMMSS.crl`; `crl/ca.crl` points to the
+latest one.
+
+## Daily operation
+
+Sign a certificate request (PEM or DER) with the certificate profile
+`endentity` of the sample `openssl.cnf`:
+
+```sh
+clca certify --profile endentity --out cert.pem request.csr
+```
+
+`clca certify` without `--profile` lists the profiles of the CA. Use explicit
+`--startdate` and `--enddate` for CA certificates. `--subject` replaces the
+subject of the request, `--san TYPE:VALUE` adds Subject Alternative Names, and
+`--reqformat SSCERT|KEY` certifies a self-signed certificate or a key instead of
+a request (see `clca help certify`).
+
+List the certificates (all, `valid` or `revoked`):
+
+```sh
+clca list valid
+```
+
+Revoke a certificate and issue a new CRL:
+
+```sh
+clca revoke --reason superseded cert.pem
+clca issuecrl
+```
+
+With `RANDOMIZE_SERIAL=1` (default), certificates are revoked by their file,
+not by serial number. Reasons: `unspecified`, `keyCompromise`, `CACompromise`,
+`affiliationChanged`, `superseded`, `cessationOfOperation`;
+`--compromisetime YYYYMMDDHHMMSSZ` records the time of a compromise.
+
+Other commands:
+
+| Command | Purpose |
+|---|---|
+| `clca login` | asks for the CA key passphrase once and opens a shell in which clca commands use it |
+| `clca backup [FILE]` | writes a tar archive of the CA instance (database, configuration, key files) |
+| `clca check` | shows checksums of the configuration and of the external programs clca uses |
+| `clca genkey [OPTIONS]` | creates a key pair (also for end entities, `--keyfile`) |
+| `clca help [COMMAND]` | lists the commands, or shows the help of one command |
+
+Keep a backup of every CA instance after every change: without the key and
+the database, the CA can issue no more certificates or CRLs.
+
+## Dates
+
+`--startdate` and `--enddate` take a DATESPEC in UTC:
+
+- the truncated format `YY[MM[DD[HH[MM[SS]]]]]`, for example `2610` for
+  2026-10-01 00:00:00. Omitted parts get their lowest value. Only for years up to
+  2049;
+- the complete format `YYYYMMDDHHMMSS`, for any year.
+
+See `clca help datespec`.
 
 ## Configuration
 
-Edit `etc/clca.cfg` and `etc/openssl.cnf` to reflect your needs, 
-particularly certificate profile and other policy settings.
-
-Please note that CA initialization takes care of setting the 
-proper paths in openssl.cnf, so no manual modification is 
-needed for this section.
-
-
-## Basic usage and getting help
-
-The CA system is contained in one single script (`bin/clca`). If
-called without arguments it prints an overview on the supported
-commands. In order to get online help about a certain command use
-
-`$ clca help COMMAND`
-or
-`$ clca COMMAND --help`
-
-
-
-## PIN entry
-
-If a HSM is used the PIN entry is usually handled by a preload command
-that calls OpenSSL in turn. Thus the configuration variable HSM_PRELOAD
-must set to the appropriate executable that allows to open the HSM
-for private key operations.
-
-
-## CA initialization
-
-Before the system an be used the CA must be created. This is necessary
-only once.
-
-For initial setup of a new CA the necessary steps are:
-
-Verify if the `etc/clca.cfg` and `etc/openssl.cnf` settings are OK.
-
-Run
-
-`$ clca initialize --startdate DATESPEC --enddate DATESPEC`
-
-The script performes several sanity checks and refuses to overwrite
-an existing CA. If the CA certificates have been manually removed
-from the `ca/` directory the existing CA is automatically backed up
-to the directory `attic/` and a new CA is created.
-
-Startdate and enddate are specified in UTC time zone. Note that the
-year must be specified with two digits only!
-
-Date/time may be specified in truncated form, omitting any number 
-of "right-hand side" date/time components (e. g. "YYMM").
-
-Run `clca help datespec` for more details on the date specification.
-
-Unless you are using a HSM you will be prompted to enter 
-the PINs protecting the CA private key during the creation of the CA.
-
-Once a CA has been set up, be sure to backup the CA key and the
-certificate database. If the key is lost no new certificates or CRLs
-can be issued.
-
-
-
-
-## Signing certificate requests
-
-Call
-
-`$ clca certify --profile PROFILE [--startdate DATESPEC --enddate DATESPEC] <request file>`
-
-in order to certify a PKCS #10 request. The request format (DER/PEM)
-is automatically detected.
-
-Please note that the `--profile` is mandatory and must reference a section in the openssl.cnf
-file which contains an x509_extensions reference and does NOT contain a distinguished_name or
-crl_extensions reference.
-
-It is possible to override the Subject DN and add SubjectAlternativeNames to the request.
-Refer to the command help text for details.
-
-The startdate and enddate options are optional and are specified in UTC time zone. 
-Note that the year must be specified with two digits only!
-
-Date/time may be specified in truncated form, omitting any number of "right-hand side" date/time components (e. g. "YYMM").
-
-Run `clca help datespec` for more details on the date specification.
-
-If no startdate/enddate is specified the default validity from the profile is used.
-
-Omitting startdate and enddate is only recommended for end entity certificates, 
-use the explicit validity for any certificate that is used as a CA.
-
-The resulting certificate is placed in the certs/ directory. A copy
-of the most current certificate is also written to newcert.pem in the
-current working directory.
-
-
-
-## Revoking certificates
-
-In order to revoke a certificate call
-
-`$ clca revoke <serial number>`
-
-This will identify the certificate in the certificate database (certs/
-directory) and mark the certificate as revoked.
-
-
-## Listing certificates
-
-Calling 
-
-`$ clca list <filter>`
-
-lists all certificates matching the specified filter. Filter may
-be empty or either 'valid' or 'revoked'.
-If no filter is specified, all certificates are printed to standard out,
-
-## Issuing CRLs
-
-For creating a new CRL run
-
-`$ clca issue_crl`
-
-This will create a new CRL and write it to the directory 
-`crls/YYYYMMDDHHMMSS.crl`. (The capital letters are replaced with
-the current time stamp.)
-
-The CRL validity is configured in the etc/openssl.cnf file.
-
-## CA Key Login
-
-If multiple clca commands should be executed in a row (e. g. for signing multiple certificates) it is possible to enter a subshell in which the CA key passphrase is cached.
-
-Running
-
-`$ clca login`
-
-will first ask for the CA key passphrase and then drop into the subshell. It is possible to execute any number of clca commands which require the CA passphrase without having to enter the passphrase again.
-
-Type `exit` to leave this shell.
-
-## Checking software integrity
-
-Integrity checks of the configuration and all required external programs
-can be performed by running
-
-`$ clca check`
-
-This command will report individual check sums for the configuration
-files and one compound checksum over all external UNIX utilities
-used by the script.
-
-## Creating CA backups
-
-At any time it is possible to create a snapshot of the current CA status,
-including the certificate database, revocation state and all related
-data (including private keys if no HSM is used).
-
-To create such a backup simply run
-
-`$ clca backup [filename]`
-
-This will create a gzip compressed tar backup in the current directory
-named `YYYYMMDDHHMMSS-ca-backup.tar.gz` if no filename is specified,
-otherwise it will create the specified file.
-
-This backup contains all information to recover the CA to the 
-state it was in when the backup command was run. To recover to this
-point simply erase the `$CA_HOME` directory and extract the desired
-backup archive. This will restore configuration file, ca executable
-and certificate database.
-
+`etc/clca.cfg` is a bash file read by every clca command. The main settings:
+
+| Setting | Meaning |
+|---|---|
+| `ENGINE` | where the CA key lives: `openssl` (key file), `pkcs11` (PKCS#11 engine), `chil` (nCipher engine), `gem` (Luna engine), `provider` (OpenSSL 3 providers) |
+| `ROOTKEYNAME` | the CA key: a file name in `private/` (`openssl`), a key identifier or PKCS#11 URI (engines, `provider`) |
+| `OPENSSL` | the `openssl` binary |
+| `OPENSSL_PROVIDERS` | OpenSSL 3 providers to load for every OpenSSL call (bash array), e.g. `( default pkcs11 )` |
+| `HSM_PRELOAD` | wrapper command for HSM key operations (e.g. nCipher `preload`) |
+| `DEFAULT_PUBKEY_ALGORITHM`, `DEFAULT_RSA_KEYSIZE`, `DEFAULT_EC_CURVE`, `DEFAULT_ENC_ALGORITHM` | defaults of `genkey` |
+| `CA_VALIDITY` | validity of a CA certificate in days if no dates are given |
+| `RANDOMIZE_SERIAL` | random certificate serial numbers |
+| `BATCH` | do not ask for confirmation before signing |
+
+Certificate profiles are sections of `etc/openssl.cnf` that contain
+`x509_extensions` and neither `crl_extensions` nor `distinguished_name`.
+clca adjusts the paths in `openssl.cnf` itself.
+
+### Passphrases
+
+By default clca asks for the passphrase of the CA key on the terminal. To get
+it differently, define a function `get_passphrase` in `clca.cfg` that prints
+it. With secret sharing (see below):
+
+```sh
+get_passphrase() {
+    eval `secret get --n 5 --k 3`
+    echo $PASSPHRASE
+}
+```
+
+If `get_passphrase` prints nothing, no passphrase is passed to OpenSSL (the HSM
+or OpenSSL asks itself, or the key needs none).
+
+### HSM keys
+
+- **PKCS#11 engine:** `ENGINE=pkcs11` and `ROOTKEYNAME` set to the key's PKCS#11
+  URI or identifier. The key is generated with the HSM's tools.
+- **OpenSSL 3 provider:** `ENGINE=provider`, `OPENSSL_PROVIDERS=( default pkcs11 )`,
+  `ROOTKEYNAME='pkcs11:token=RootCA;object=rootca1;type=private'`, and
+  `export PKCS11_PROVIDER_MODULE=/path/to/the/hsm/pkcs11/library.so` in
+  `clca.cfg`. The provider can use any algorithm the HSM supports. clca asks for
+  the token PIN as the passphrase.
+- **nCipher (chil) and Luna (gem) engines:** `ENGINE=chil` or `ENGINE=gem`,
+  following the vendor's OpenSSL engine documentation.
+
+### Extensions
+
+- A function `custom_NAME` in `clca.cfg` adds a command `clca NAME`. It must
+  print a description for `--shorthelp` and its usage for `--help`.
+- `hook_init` and `hook_exit` in `clca.cfg` run before and after every command
+  of this CA instance.
+- Executables in `/etc/clca/hooks.d/pre-command.d/` and `post-command.d/`
+  (`CLCA_HOOK_DIR`) run for every command of every CA instance on the host,
+  with `CLCA_COMMAND`, `CA_HOME` and (after the command) `CLCA_EXIT_CODE` in
+  their environment. A failing pre-command hook aborts the command.
+
+## Secret sharing
+
+`secret` protects the passphrase of a CA key with Shamir's Secret Sharing. A key
+ceremony with 3 of 5 share holders:
+
+```sh
+eval `secret generate --n 5 --k 3` openssl genrsa -aes256 -passout env:PASSPHRASE -out private/cakey.pem 3072
+```
+
+`secret generate` creates a random passphrase and prints the shares one by one;
+each share holder copies and keeps one share. The passphrase is passed to the
+command after it (here: the key generation) and is never shown. Later,
+`secret get --n 5 --k 3` asks for three shares and reconstructs the passphrase
+(use it in `get_passphrase`, see above). With `--encrypted-shares --share-dir
+DIR`, each share is stored in a file encrypted with its holder's own passphrase.
+See `secret --man`.
+
+## Provisioning
+
+`provision` renders CA instance directories from a template configuration
+(`--template NAME`, YAML files in `etc/templates`), with values from the
+template and from the command line (`--set KEY:VALUE`). This keeps many CA
+instances consistent and makes rollovers repeatable. See `provision --help`.
