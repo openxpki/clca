@@ -228,3 +228,25 @@ See `secret --man`.
 (`--template NAME`, YAML files in `etc/templates`), with values from the
 template and from the command line (`--set KEY:VALUE`). This keeps many CA
 instances consistent and makes rollovers repeatable. See `provision --help`.
+
+## Enterprise Edition and support
+
+clca is developed and maintained by
+[White Rabbit Security GmbH](https://whiterabbitsecurity.com). The Community
+Edition in this repository is a complete tool for running offline CAs and stays
+available under the GPL. For organizations that want a ready-to-run Root CA
+environment, White Rabbit Security offers the
+[clca Enterprise Edition](https://whiterabbitsecurity.com/en-us/products/clca-en.html),
+with maintenance and support.
+
+| | Community Edition | Enterprise Edition |
+|---|---|---|
+| CA tools `clca`, `secret`, `provision` | yes | yes |
+| CA keys in files, with secret sharing, or in an HSM (PKCS#11, OpenSSL 3 providers) | yes | yes |
+| Post-quantum algorithms | with an OpenSSL 3 provider you install (e.g. oqs-provider) | preinstalled |
+| Runtime environment | a Linux host you set up yourself | bootable live image for air-gapped operation, on dedicated hardware or as a virtual machine, with an (optionally encrypted) persistence medium |
+| HSM drivers | installed by you | installed at boot from the persistence medium, no image rebuild |
+| Role separation and audit trail of CA operations | no | yes |
+| Documentation | this README and `clca help` | user documentation and virtualization guide |
+| Customer-specific CA templates and runbooks for key ceremonies | no | yes |
+| Maintenance and support | community, via GitHub | White Rabbit Security |
